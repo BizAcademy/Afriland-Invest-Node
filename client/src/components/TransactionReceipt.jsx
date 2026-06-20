@@ -9,6 +9,7 @@ export const KIND_CONFIG = {
   revenu: { label: 'Revenu investissement', icon: 'fa-coins', color: '#16a34a' },
   bonus: { label: 'Bonus roue', icon: 'fa-dice', color: '#f59e0b' },
   credit_admin: { label: 'Crédit administrateur', icon: 'fa-gift', color: '#0891b2' },
+  debit_admin: { label: 'Retrait Administrateur', icon: 'fa-hand-holding-usd', color: '#ef4444' },
   cadeau_vip: { label: 'Cadeau VIP', icon: 'fa-gift', color: '#f59e0b' },
   mise_roue: { label: 'Mise roue', icon: 'fa-dice', color: '#ef4444' },
   gain_roue: { label: 'Gain roue', icon: 'fa-dice', color: '#16a34a' },

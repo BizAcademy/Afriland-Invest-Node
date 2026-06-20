@@ -380,6 +380,145 @@ router.put('/commandes/:id/toggle', adminMiddleware, async (req, res) => {
   }
 });
 
+// Liste des plans VIP ACTIFS (tous les investissements en cours), avec le
+// détenteur, le type de plan, le capital, le revenu/jour et le temps restant.
+router.get('/active-plans', adminMiddleware, async (req, res) => {
+  try {
+    const { data: cmds, error } = await supabase
+      .from('commandes')
+      .select('id, user_id, montant, revenu_journalier, date_debut, date_fin, statut, planinvestissement(nom, duree_jours)')
+      .eq('statut', 'actif')
+      .order('date_fin', { ascending: true })
+      .range(0, 9999); // éviter le plafond Supabase par défaut (1000 lignes)
+    if (error) throw error;
+
+    const ids = [...new Set((cmds || []).map(c => c.user_id))];
+    let userMap = {};
+    if (ids.length) {
+      const { data: us } = await supabase
+        .from('utilisateurs').select('id, nom, telephone, pays').in('id', ids).range(0, 9999);
+      userMap = Object.fromEntries((us || []).map(u => [u.id, u]));
+    }
+
+    const todayMs = Date.parse(new Date().toISOString().slice(0, 10)); // minuit UTC du jour
+    const plans = (cmds || []).map(c => {
+      const u = userMap[c.user_id] || {};
+      const finMs = c.date_fin ? Date.parse(c.date_fin) : null;
+      const jours_restants = finMs != null ? Math.max(0, Math.round((finMs - todayMs) / 86400000)) : null;
+      return {
+        id: c.id,
+        user_id: c.user_id,
+        nom: u.nom || 'Inconnu',
+        telephone: u.telephone || '',
+        pays: u.pays || '',
+        plan_nom: c.planinvestissement?.nom || 'Plan',
+        duree_jours: c.planinvestissement?.duree_jours || null,
+        montant: parseFloat(c.montant || 0),
+        revenu_journalier: parseFloat(c.revenu_journalier || 0),
+        date_debut: c.date_debut,
+        date_fin: c.date_fin,
+        jours_restants,
+      };
+    });
+
+    const summary = {
+      total: plans.length,
+      utilisateurs: ids.length,
+      capital_investi: Math.round(plans.reduce((s, p) => s + p.montant, 0)),
+      revenu_journalier_total: Math.round(plans.reduce((s, p) => s + p.revenu_journalier, 0)),
+    };
+
+    res.json({ plans, summary });
+  } catch (err) {
+    console.error('active-plans error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ─── SUPPORT : messagerie utilisateurs ↔ administrateur ───
+
+// Liste des conversations (groupées par numéro) + total de messages non lus.
+router.get('/support', adminMiddleware, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('support_messages')
+      .select('id, telephone, nom, expediteur, message, lu, date_creation')
+      .order('date_creation', { ascending: true })
+      .range(0, 9999);
+    if (error) throw error;
+
+    const convoMap = new Map();
+    for (const m of data || []) {
+      let c = convoMap.get(m.telephone);
+      if (!c) {
+        c = { telephone: m.telephone, nom: m.nom || null, total: 0, non_lus: 0, dernier_message: '', derniere_date: null };
+        convoMap.set(m.telephone, c);
+      }
+      c.total++;
+      if (m.nom) c.nom = m.nom;
+      if (m.expediteur === 'user' && !m.lu) c.non_lus++;
+      c.dernier_message = m.message;
+      c.derniere_date = m.date_creation;
+    }
+    const conversations = [...convoMap.values()].sort(
+      (a, b) => new Date(b.derniere_date) - new Date(a.derniere_date)
+    );
+    const total_non_lus = conversations.reduce((s, c) => s + c.non_lus, 0);
+
+    res.json({ conversations, total_non_lus });
+  } catch (err) {
+    console.error('admin support list error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Fil d'une conversation + marque les messages utilisateur comme lus.
+router.get('/support/thread', adminMiddleware, async (req, res) => {
+  try {
+    const tel = req.query.telephone;
+    if (!tel) return res.status(400).json({ error: 'Numéro requis' });
+
+    const { data, error } = await supabase
+      .from('support_messages')
+      .select('id, expediteur, message, lu, date_creation')
+      .eq('telephone', tel)
+      .order('date_creation', { ascending: true })
+      .range(0, 9999);
+    if (error) throw error;
+
+    await supabase
+      .from('support_messages')
+      .update({ lu: true })
+      .eq('telephone', tel).eq('expediteur', 'user').eq('lu', false);
+
+    res.json({ telephone: tel, messages: data || [] });
+  } catch (err) {
+    console.error('admin support thread error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Répondre à un utilisateur.
+router.post('/support/reply', adminMiddleware, async (req, res) => {
+  try {
+    const { telephone, message } = req.body;
+    if (!telephone) return res.status(400).json({ error: 'Numéro requis' });
+    if (!message || !message.trim()) return res.status(400).json({ error: 'Le message est vide' });
+
+    const { data, error } = await supabase
+      .from('support_messages')
+      .insert({ telephone, nom: null, expediteur: 'admin', message: message.trim().slice(0, 2000), lu: true })
+      .select()
+      .single();
+    if (error) throw error;
+
+    res.json({ message: data });
+  } catch (err) {
+    console.error('admin support reply error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Détails complets d'un utilisateur (admin)
 router.get('/users/:id', adminMiddleware, async (req, res) => {
   try {

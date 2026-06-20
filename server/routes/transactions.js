@@ -7,6 +7,7 @@ const REVENU_MAP = {
   parrainage: { kind: 'parrainage', label: 'Commission parrainage' },
   bonus: { kind: 'bonus', label: 'Bonus roue de la fortune' },
   credit_admin: { kind: 'credit_admin', label: 'Crédit administrateur' },
+  debit_admin: { kind: 'debit_admin', label: 'Retrait Administrateur', sens: '-' },
   cadeau_vip: { kind: 'cadeau_vip', label: 'Cadeau VIP' },
   mise_roue: { kind: 'mise_roue', label: 'Mise roue', sens: '-' },
   gain_roue: { kind: 'gain_roue', label: 'Gain roue', sens: '+' },

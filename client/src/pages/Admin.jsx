@@ -7,6 +7,14 @@ import MiniLineChart from '../components/MiniLineChart';
 export default function Admin() {
   const [stats, setStats] = useState(null);
   const [tab, setTab] = useState('dashboard');
+  const [activePlans, setActivePlans] = useState(null);
+  const [activePlansLoading, setActivePlansLoading] = useState(false);
+  const [vipSearch, setVipSearch] = useState('');
+  const [supportConvos, setSupportConvos] = useState([]);
+  const [supportUnread, setSupportUnread] = useState(0);
+  const [supportThread, setSupportThread] = useState(null); // { telephone, nom, messages }
+  const [supportThreadLoading, setSupportThreadLoading] = useState(false);
+  const [supportReply, setSupportReply] = useState('');
   const [depots, setDepots] = useState([]);
   const [retraits, setRetraits] = useState([]);
   const [cadeaux, setCadeaux] = useState([]);
@@ -137,7 +145,7 @@ export default function Admin() {
 
   const loadAll = async () => {
     try {
-      const [statsRes, depotsRes, retraitsRes, cadeauxRes, usersRes, postsRes, plansRes, annoncesRes, settingsRes, txRes, faqRes, demoRechargesRes] = await Promise.all([
+      const [statsRes, depotsRes, retraitsRes, cadeauxRes, usersRes, postsRes, plansRes, annoncesRes, settingsRes, txRes, faqRes, demoRechargesRes, supportRes] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/admin/depots'),
         api.get('/admin/retraits'),
@@ -150,6 +158,7 @@ export default function Admin() {
         api.get('/transactions/admin'),
         api.get('/admin/faq'),
         api.get('/admin/demo-recharges'),
+        api.get('/admin/support'),
       ]);
       setStats(statsRes.data);
       setLastUpdated(new Date());
@@ -165,6 +174,8 @@ export default function Admin() {
       setTransactions(txRes.data.transactions || []);
       setFaqs(faqRes.data.faqs || []);
       setDemoRecharges(demoRechargesRes.data.recharges || []);
+      setSupportConvos(supportRes.data.conversations || []);
+      setSupportUnread(supportRes.data.total_non_lus || 0);
     } catch { toast.error('Erreur de chargement admin'); }
     finally { setLoading(false); }
   };
@@ -179,8 +190,49 @@ export default function Admin() {
     finally { setWheelLoading(false); }
   };
 
+  const loadActivePlans = async () => {
+    setActivePlansLoading(true);
+    try {
+      const res = await api.get('/admin/active-plans');
+      setActivePlans(res.data);
+    } catch { toast.error('Erreur de chargement des plans VIP'); }
+    finally { setActivePlansLoading(false); }
+  };
+
+  const loadSupport = async () => {
+    try {
+      const res = await api.get('/admin/support');
+      setSupportConvos(res.data.conversations || []);
+      setSupportUnread(res.data.total_non_lus || 0);
+    } catch { /* silencieux */ }
+  };
+
+  const openSupportThread = async (convo) => {
+    setSupportThreadLoading(true);
+    setSupportThread({ telephone: convo.telephone, nom: convo.nom, messages: [] });
+    try {
+      const res = await api.get('/admin/support/thread', { params: { telephone: convo.telephone } });
+      setSupportThread({ telephone: convo.telephone, nom: convo.nom, messages: res.data.messages || [] });
+      loadSupport(); // l'ouverture marque les messages comme lus → rafraîchir le badge
+    } catch { toast.error('Erreur de chargement de la conversation'); }
+    finally { setSupportThreadLoading(false); }
+  };
+
+  const sendSupportReply = async () => {
+    if (!supportReply.trim() || !supportThread) return;
+    try {
+      await api.post('/admin/support/reply', { telephone: supportThread.telephone, message: supportReply.trim() });
+      setSupportReply('');
+      const res = await api.get('/admin/support/thread', { params: { telephone: supportThread.telephone } });
+      setSupportThread(t => ({ ...t, messages: res.data.messages || [] }));
+      loadSupport();
+    } catch (err) { toast.error(err.response?.data?.error || "Échec de l'envoi"); }
+  };
+
   useEffect(() => {
     if (tab === 'roue') loadWheelStats(wheelPeriod);
+    if (tab === 'vip') loadActivePlans();
+    if (tab === 'support') { loadSupport(); setSupportThread(null); }
   }, [tab, wheelPeriod]);
 
   // ── Dépôts ──
@@ -548,6 +600,8 @@ export default function Admin() {
     { key: 'transactions', label: 'Transactions', icon: 'fa-receipt' },
     { key: 'roue', label: 'Roue', icon: 'fa-dharmachakra' },
     { key: 'users', label: 'Utilisateurs', icon: 'fa-users' },
+    { key: 'vip', label: 'VIP actifs', icon: 'fa-crown' },
+    { key: 'support', label: 'Support', icon: 'fa-headset', badge: supportUnread },
     { key: 'posts', label: 'Posts', icon: 'fa-newspaper', badge: posts.filter(p => p.statut === 'en_attente').length },
     { key: 'plans', label: 'Plans VIP', icon: 'fa-chart-line' },
     { key: 'annonces', label: 'Affiches', icon: 'fa-image' },
@@ -1269,6 +1323,169 @@ export default function Admin() {
                 )}
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {/* ─── PLANS VIP ACTIFS ─── */}
+      {tab === 'vip' && (
+        <div>
+          {activePlansLoading && !activePlans ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="loading-spinner" /></div>
+          ) : (
+            <>
+              {/* Cartes récap */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 16 }}>
+                {[
+                  { label: 'Plans actifs', value: activePlans?.summary?.total ?? 0, icon: 'fa-crown', color: '#a855f7', bg: 'rgba(168,85,247,0.08)' },
+                  { label: 'Investisseurs', value: activePlans?.summary?.utilisateurs ?? 0, icon: 'fa-users', color: 'var(--blue-primary)', bg: 'rgba(59,130,246,0.08)' },
+                  { label: 'Capital investi', value: `${fmt(activePlans?.summary?.capital_investi)} F`, icon: 'fa-coins', color: 'var(--green-primary)', bg: 'rgba(34,197,94,0.08)' },
+                  { label: 'Revenu/jour total', value: `${fmt(activePlans?.summary?.revenu_journalier_total)} F`, icon: 'fa-calendar-day', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)' },
+                ].map(s => (
+                  <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.color}33`, borderRadius: 14, padding: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: `${s.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <i className={`fas ${s.icon}`} style={{ color: s.color, fontSize: 15 }} />
+                      </div>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.3 }}>{s.label}</p>
+                    </div>
+                    <p style={{ fontWeight: 800, fontSize: 17, color: s.color }}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Recherche */}
+              <div style={{ position: 'relative', marginBottom: 14 }}>
+                <i className="fas fa-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 13 }} />
+                <input
+                  type="text"
+                  placeholder="Rechercher (nom, numéro, plan…)"
+                  value={vipSearch}
+                  onChange={e => setVipSearch(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px 10px 34px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13 }}
+                />
+              </div>
+
+              {/* Liste des plans actifs */}
+              {(() => {
+                const q = vipSearch.trim().toLowerCase();
+                const list = (activePlans?.plans || []).filter(p =>
+                  !q ||
+                  (p.nom || '').toLowerCase().includes(q) ||
+                  (p.telephone || '').toLowerCase().includes(q) ||
+                  (p.plan_nom || '').toLowerCase().includes(q)
+                );
+                if (list.length === 0) return <div className="empty-state"><i className="fas fa-crown" /><p>Aucun plan VIP actif</p></div>;
+                return list.map(p => {
+                  const duree = p.duree_jours || 0;
+                  const restants = p.jours_restants ?? 0;
+                  const ecoules = duree ? Math.max(0, Math.min(duree, duree - restants)) : 0;
+                  const pct = duree ? Math.round((ecoules / duree) * 100) : 0;
+                  const urgent = restants <= 3;
+                  return (
+                    <div key={p.id} className="card" style={{ marginBottom: 10, padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontWeight: 700, fontSize: 14 }}>{p.nom}</p>
+                          <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>{p.telephone}{p.pays ? ` • ${p.pays}` : ''}</p>
+                        </div>
+                        <span className="badge badge-blue" style={{ flexShrink: 0 }}><i className="fas fa-crown" style={{ marginRight: 4 }} />{p.plan_nom}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                        <span><i className="fas fa-coins" style={{ marginRight: 5, color: 'var(--green-primary)' }} />Investi : <strong>{fmt(p.montant)} F</strong></span>
+                        <span><i className="fas fa-calendar-day" style={{ marginRight: 5, color: '#f59e0b' }} />+{fmt(p.revenu_journalier)} F/jour</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                        <span>Début : {new Date(p.date_debut).toLocaleDateString('fr-FR')}</span>
+                        <span style={{ color: urgent ? '#ef4444' : 'var(--text-secondary)', fontWeight: 700 }}>
+                          {restants > 0 ? `${restants} jour${restants > 1 ? 's' : ''} restant${restants > 1 ? 's' : ''}` : 'Dernier jour'}
+                        </span>
+                      </div>
+                      <div style={{ height: 7, borderRadius: 5, background: 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: urgent ? '#ef4444' : 'var(--green-primary)', borderRadius: 5 }} />
+                      </div>
+                      <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, textAlign: 'right' }}>Fin : {new Date(p.date_fin).toLocaleDateString('fr-FR')}</p>
+                    </div>
+                  );
+                });
+              })()}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ─── SUPPORT ─── */}
+      {tab === 'support' && (
+        <div>
+          {!supportThread ? (
+            <>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 14 }}>
+                <i className="fas fa-headset" style={{ marginRight: 6 }} />
+                Messages des utilisateurs (mot de passe oublié, assistance…). Cliquez pour répondre.
+              </p>
+              {supportConvos.length === 0 ? (
+                <div className="empty-state"><i className="fas fa-comments" /><p>Aucun message</p></div>
+              ) : supportConvos.map(c => (
+                <button key={c.telephone} onClick={() => openSupportThread(c)} style={{
+                  width: '100%', textAlign: 'left', background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                  borderRadius: 14, padding: '12px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
+                }}>
+                  <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(27,42,107,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <i className="fas fa-user" style={{ color: 'var(--blue-primary)' }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: 700, fontSize: 14 }}>{c.nom || 'Utilisateur'}</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>{c.telephone}</p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.dernier_message}</p>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 10 }}>{c.derniere_date ? new Date(c.derniere_date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : ''}</p>
+                    {c.non_lus > 0 && <span style={{ display: 'inline-block', marginTop: 4, background: '#ef4444', color: '#fff', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>{c.non_lus}</span>}
+                  </div>
+                </button>
+              ))}
+            </>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <button onClick={() => setSupportThread(null)} style={{ background: 'rgba(0,0,0,0.05)', border: '1px solid var(--border-color)', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                  <i className="fas fa-arrow-left" />
+                </button>
+                <div>
+                  <p style={{ fontWeight: 700 }}>{supportThread.nom || 'Utilisateur'}</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>{supportThread.telephone}</p>
+                </div>
+              </div>
+
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 14, padding: 14, minHeight: 220, maxHeight: 440, overflowY: 'auto', marginBottom: 12 }}>
+                {supportThreadLoading ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}><div className="loading-spinner" /></div>
+                ) : supportThread.messages.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: 20 }}>Aucun message</p>
+                ) : supportThread.messages.map(m => {
+                  const admin = m.expediteur === 'admin';
+                  return (
+                    <div key={m.id} style={{ display: 'flex', justifyContent: admin ? 'flex-end' : 'flex-start', marginBottom: 8 }}>
+                      <div style={{ maxWidth: '80%', padding: '9px 13px', borderRadius: 14, fontSize: 13.5, lineHeight: 1.45,
+                        background: admin ? 'linear-gradient(135deg,var(--green-primary),var(--green-dark))' : 'rgba(0,0,0,0.06)',
+                        color: admin ? '#fff' : 'var(--text-primary)', borderBottomRightRadius: admin ? 4 : 14, borderBottomLeftRadius: admin ? 14 : 4 }}>
+                        {!admin && <p style={{ fontSize: 10, fontWeight: 700, opacity: 0.8, marginBottom: 3 }}>Utilisateur</p>}
+                        <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.message}</p>
+                        <p style={{ fontSize: 9, opacity: 0.7, marginTop: 4, textAlign: 'right' }}>{new Date(m.date_creation).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input value={supportReply} onChange={e => setSupportReply(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendSupportReply(); }}
+                  placeholder="Votre réponse…" style={{ flex: 1, padding: '11px 14px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13 }} />
+                <button onClick={sendSupportReply} disabled={!supportReply.trim()} style={{ padding: '11px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,var(--green-primary),var(--green-dark))', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
+                  <i className="fas fa-paper-plane" />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}

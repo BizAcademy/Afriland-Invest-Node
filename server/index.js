@@ -64,6 +64,7 @@ const transactionsRoutes = require('./routes/transactions');
 const faqRoutes = require('./routes/faq');
 const publicRoutes = require('./routes/public');
 const demoRoutes = require('./routes/demo');
+const supportRoutes = require('./routes/support');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -103,6 +104,7 @@ app.use('/api/transactions', transactionsRoutes);
 app.use('/api/faq', faqRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/demo', demoRoutes);
+app.use('/api/support', supportRoutes);
 
 const clientBuildPath = path.join(__dirname, '../client/dist');
 app.use(express.static(clientBuildPath, {

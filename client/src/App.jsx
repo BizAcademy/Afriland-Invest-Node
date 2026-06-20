@@ -19,6 +19,7 @@ import Admin from './pages/Admin';
 import Salary from './pages/Salary';
 import Transactions from './pages/Transactions';
 import Community from './pages/Community';
+import Support from './pages/Support';
 
 function PrivateRoute({ children, adminOnly = false }) {
   const { user } = useAuth();
@@ -56,6 +57,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+          <Route path="/support" element={<Support />} />
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/deposit" element={<PrivateRoute><Deposit /></PrivateRoute>} />
           <Route path="/withdrawal" element={<PrivateRoute><Withdrawal /></PrivateRoute>} />

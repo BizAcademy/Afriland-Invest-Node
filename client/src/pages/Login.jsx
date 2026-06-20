@@ -103,6 +103,10 @@ export default function Login() {
           </div>
         </div>
 
+        <div style={{ textAlign: 'right', marginTop: -4, marginBottom: 10 }}>
+          <Link to="/support" style={{ color: 'var(--text-muted)', fontSize: 13 }}>Mot de passe oublié ?</Link>
+        </div>
+
         <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: 8 }}>
           {loading ? <span className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : (
             <><i className="fas fa-sign-in-alt" /> Se connecter</>

@@ -54,6 +54,7 @@ export default function Transactions() {
           <option value="revenu">Revenu investissement</option>
           <option value="bonus">Bonus roue</option>
           <option value="credit_admin">Crédit administrateur</option>
+          <option value="debit_admin">Retrait Administrateur</option>
           <option value="cadeau_vip">Cadeau VIP</option>
           <option value="mise_roue">Mise roue</option>
           <option value="gain_roue">Gain roue</option>

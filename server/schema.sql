@@ -167,3 +167,16 @@ INSERT INTO planinvestissement (serie, nom, prix, rendement_journalier, duree_jo
 ('X', 'Action VIP 10', 400000, 19.50, 125, 'Plan d''investissement premium', ''),
 ('X', 'Action VIP 11', 600000, 19.50, 125, 'Plan d''investissement premium', '')
 ON CONFLICT DO NOTHING;
+
+-- ─── Support : messagerie utilisateurs ↔ administrateur ───
+CREATE TABLE IF NOT EXISTS support_messages (
+  id SERIAL PRIMARY KEY,
+  telephone VARCHAR(30) NOT NULL,
+  nom VARCHAR(120),
+  expediteur VARCHAR(10) NOT NULL CHECK (expediteur IN ('user','admin')),
+  message TEXT NOT NULL,
+  lu BOOLEAN DEFAULT FALSE,
+  date_creation TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_support_messages_tel ON support_messages(telephone);
+CREATE INDEX IF NOT EXISTS idx_support_messages_lu ON support_messages(lu);
