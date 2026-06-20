@@ -1,0 +1,21 @@
+Afribapay coupe les frais de 1,5% sur chaque dépôt je veux que ces frais soient appliqué directement au solde que l'utilisateur veut déposer ( exemple : l'utilisateur veut effectuer le dépôt de 1000f il doit payer 1000f+1,5% et c'est seulement 1000f qui doit être crédité dans son compte ) ce pourcentage ne doit pas s'afficher côté utilisateur il doit juste s'appliquer.
+
+
+Je veux qu'on fasse un ajustement côté Roue de la fortune, tu ne vas rien modifier tu vas juste ajouter la fonctionnalité que je vais te donner
+Voilà ce que tu vas faire :
+
+Lorsque l'utilisateur clique sur Roue il doit avoir la possibilité de jouer en mode démo et le solde démo doit être à 100000fcfa pour tout les utilisateurs et si le solde finis l'utilisateur peut demander le rechargement du solde et l'administrateur approuve
+
+
+
+Je veux que le disign du mode démo soit le même que pour la version réelle
+
+Si l'utilisateur a une mise entre 100f et 500f le premier tour il doit tomber sur ×2 ou 200 ou 100 ou 50  le deuxième tour sur 100 le troisième tour 0 les quatrième tour il doit gagner entre 1000f , 100f et ×0,5 pas plus le cinquième tour il doit tomber sur 0 le sixième tour il doit gagner maximum 1000f le septième Tour sur 0 le huitième tour sur 500 le neuvième tour sur 0 et le dixième il doit gagner 100f , 2000, ou ×2 
+
+Si l'utilisateur a une mise entre 500f et 1000f le premier tour il doit tomber sur 500 ou ×2 ou 1000f ou ×0,5  le deuxième tour sur ×0,5 le troisième tour 0 les quatrième tour il doit gagner entre 2000f , 500f et 5000f pas plus le cinquième tour il doit tomber sur 0 le sixième tour il doit gagner maximum 1000f le septième Tour sur 0 ou ×0,5 le huitième tour sur 0 ou 200 le neuvième tour sur 0 et le dixième il doit gagner 2000f , 5000 ou ×2
+
+Si l'utilisateur a une mise entre 1000f ou plus le premier tour il doit tomber sur 10000 ou 5000 ou ×2  le deuxième tour sur ×0,5 le troisième tour 0 les quatrième tour il doit gagner entre 1000f , 5000f et 2000f pas plus le cinquième tour il doit tomber sur 0 le sixième tour il doit gagner maximum 1000f le septième Tour sur 100 le huitième tour sur 0 ou ×0,5 le neuvième tour sur 0 ou 500 et le dixième il doit gagner 1000f , 5000, ou ×2
+
+Le système doit se reposer sur ces 10 Tours mais l'ordre ne doit pas être le même obligation à chaque tour et sur chaque tour ( 10 tours )
+Le système du compte démo ne doit pas être mélangé avec le système réel pour éviter les bugs, le système réel doit rester comme il est pas de changement
+Le système de démo sur la roue ne doit pas être dans le panneau d'administrateur ( les gains ou les mises que les utilisateurs vont faire dans le compte démo ne doivent pas s'afficher dans le panneau d'administrateur

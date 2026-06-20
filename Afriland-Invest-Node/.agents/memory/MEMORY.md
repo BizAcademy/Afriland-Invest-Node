@@ -1,0 +1,2 @@
+- [Afriland Invest architecture](afriland-invest.md) — serveur standalone port 3000 (pas le proxy artifact), prod cPanel externe (deploy manuel), roue réelle = SQL / roue démo = isolée en JS.
+- [Revenus journaliers 24h glissant](afriland-revenus-24h.md) — crédit 1×/24h ancré par investissement (last_revenue_at), anti-double, ordre de déploiement SQL impératif.

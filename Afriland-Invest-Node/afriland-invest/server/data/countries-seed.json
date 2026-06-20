@@ -1,0 +1,364 @@
+[
+  {
+    "country_code": "BJ",
+    "country_name": "Benin",
+    "country_flag": "🇧🇯",
+    "prefix": "229",
+    "currency": "XOF",
+    "operators": [
+      {
+        "operator_code": "moov",
+        "operator_name": "Moov Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "mtn",
+        "operator_name": "MTN Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "celtiis",
+        "operator_name": "Celtiis Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "coris",
+        "operator_name": "Coris Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": true
+      }
+    ]
+  },
+  {
+    "country_code": "BF",
+    "country_name": "Burkina Faso",
+    "country_flag": "🇧🇫",
+    "prefix": "226",
+    "currency": "XOF",
+    "operators": [
+      {
+        "operator_code": "moov",
+        "operator_name": "Moov Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "orange",
+        "operator_name": "Orange Money",
+        "otp_required": true,
+        "ussd_code": "*144*4*6*montant#",
+        "wallet": false
+      },
+      {
+        "operator_code": "wligdicash",
+        "operator_name": "Wallet LigdiCash",
+        "otp_required": true,
+        "ussd_code": "Get OTP from endpoint .../pay/otp",
+        "wallet": true
+      }
+    ]
+  },
+  {
+    "country_code": "CM",
+    "country_name": "Cameroon",
+    "country_flag": "🇨🇲",
+    "prefix": "237",
+    "currency": "XAF",
+    "operators": [
+      {
+        "operator_code": "mtn",
+        "operator_name": "MTN Money",
+        "otp_required": false,
+        "ussd_code": "*126#",
+        "wallet": false
+      },
+      {
+        "operator_code": "orange",
+        "operator_name": "Orange Money",
+        "otp_required": false,
+        "ussd_code": "#150*50#",
+        "wallet": false
+      }
+    ]
+  },
+  {
+    "country_code": "CF",
+    "country_name": "Central African Republic",
+    "country_flag": "🇨🇫",
+    "prefix": "236",
+    "currency": "XAF",
+    "operators": [
+      {
+        "operator_code": "orange",
+        "operator_name": "Orange Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      }
+    ]
+  },
+  {
+    "country_code": "CG",
+    "country_name": "Congo",
+    "country_flag": "🇨🇬",
+    "prefix": "242",
+    "currency": "XAF",
+    "operators": [
+      {
+        "operator_code": "airtel",
+        "operator_name": "Airtel Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "mtn",
+        "operator_name": "MTN Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      }
+    ]
+  },
+  {
+    "country_code": "CI",
+    "country_name": "Côte d'Ivoire",
+    "country_flag": "🇨🇮",
+    "prefix": "225",
+    "currency": "XOF",
+    "operators": [
+      {
+        "operator_code": "moov",
+        "operator_name": "Moov Money",
+        "otp_required": false,
+        "ussd_code": "*155#",
+        "wallet": false
+      },
+      {
+        "operator_code": "mtn",
+        "operator_name": "MTN Money",
+        "otp_required": false,
+        "ussd_code": "*133#",
+        "wallet": false
+      },
+      {
+        "operator_code": "orange",
+        "operator_name": "Orange Money",
+        "otp_required": true,
+        "ussd_code": "#144*82#",
+        "wallet": false
+      },
+      {
+        "operator_code": "wave",
+        "operator_name": "Wave Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      }
+    ]
+  },
+  {
+    "country_code": "GA",
+    "country_name": "Gabon",
+    "country_flag": "🇬🇦",
+    "prefix": "241",
+    "currency": "XAF",
+    "operators": [
+      {
+        "operator_code": "airtel",
+        "operator_name": "Airtel Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "moov",
+        "operator_name": "Moov Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      }
+    ]
+  },
+  {
+    "country_code": "GW",
+    "country_name": "Guinea-Bissau",
+    "country_flag": "🇬🇼",
+    "prefix": "245",
+    "currency": "XOF",
+    "operators": [
+      {
+        "operator_code": "orange",
+        "operator_name": "Orange Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      }
+    ]
+  },
+  {
+    "country_code": "ML",
+    "country_name": "Mali",
+    "country_flag": "🇲🇱",
+    "prefix": "223",
+    "currency": "XOF",
+    "operators": [
+      {
+        "operator_code": "moov",
+        "operator_name": "Moov Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "orange",
+        "operator_name": "Orange Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      }
+    ]
+  },
+  {
+    "country_code": "NE",
+    "country_name": "Niger",
+    "country_flag": "🇳🇪",
+    "prefix": "227",
+    "currency": "XOF",
+    "operators": [
+      {
+        "operator_code": "airtel",
+        "operator_name": "Airtel Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "wligdicash",
+        "operator_name": "Wallet LigdiCash",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": true
+      },
+      {
+        "operator_code": "moov",
+        "operator_name": "Moov Money",
+        "otp_required": false,
+        "ussd_code": "*157#",
+        "wallet": false
+      },
+      {
+        "operator_code": "amanata",
+        "operator_name": "Amanata",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "nita",
+        "operator_name": "Nita",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "zamani",
+        "operator_name": "Zamani",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      }
+    ]
+  },
+  {
+    "country_code": "SN",
+    "country_name": "Senegal",
+    "country_flag": "🇸🇳",
+    "prefix": "221",
+    "currency": "XOF",
+    "operators": [
+      {
+        "operator_code": "emoney",
+        "operator_name": "E-money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "free",
+        "operator_name": "Free Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "orange",
+        "operator_name": "Orange Money",
+        "otp_required": true,
+        "ussd_code": "#144*391#",
+        "wallet": false
+      },
+      {
+        "operator_code": "wave",
+        "operator_name": "Wave Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      }
+    ]
+  },
+  {
+    "country_code": "TD",
+    "country_name": "Tchad",
+    "country_flag": "🇹🇩",
+    "prefix": "235",
+    "currency": "XAF",
+    "operators": [
+      {
+        "operator_code": "airtel",
+        "operator_name": "Airtel Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "moov",
+        "operator_name": "Moov Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      }
+    ]
+  },
+  {
+    "country_code": "TG",
+    "country_name": "Togo",
+    "country_flag": "🇹🇬",
+    "prefix": "228",
+    "currency": "XOF",
+    "operators": [
+      {
+        "operator_code": "moov",
+        "operator_name": "Moov Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      },
+      {
+        "operator_code": "tmoney",
+        "operator_name": "T-Money",
+        "otp_required": false,
+        "ussd_code": "",
+        "wallet": false
+      }
+    ]
+  }
+]

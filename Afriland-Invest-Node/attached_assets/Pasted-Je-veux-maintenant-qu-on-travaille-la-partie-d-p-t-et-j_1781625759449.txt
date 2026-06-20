@@ -1,0 +1,13 @@
+Je veux maintenant qu'on travaille la partie dépôt et je vais utiliser Afribapay pour les paiements Je veux que tu consultes la documentation pour l'intégration des méthodes de paiement et tu fais ceci.
+1- lorsque l'utilisateur clique sur dépôt il doit être dirigé sur une page où il fera le dépôt en choisissant son pays ( les pays doivent avoir leur drapeau) , son  moyen de paiement , mettre le montant et confirmer le dépôt ( le moment minimum de dépôt doit être celui qui est configuré dans le panneau d'administrateur ) 
+Afribapay coupe les frais de 3,5% sur chaque dépôt je veux que ces frais soient appliqué directement au solde que l'utilisateur veut déposer ( exemple : l'utilisateur veut effectuer le dépôt de 1000f il doit payer 1000f+3,5% et c'est seulement 1000f qui doit être crédité dans son compte )
+Dans l'intégration des paiements tu exclus les pays comme RDC , Guinée et Gambie , tu laisses uniquement les pays qui ont le XOF ET XAF 
+Les pays qui sont disponibles dans Afribapay pour les paiements tu les ajoute à l'inscription et au retrait 
+
+2- sur chaque moyen de paiement il y a un logo ( je dois configuer les logo de ces moyens de paiements depuis le panneau d'administrateur ) par exemple MTN et ORANGE tu dois faire en sorte que chaque moyen de paiement ai son logo et les moyens soient dans une forme carré avec bord arrondis et dans ces carrés les logos de chaque moyen de paiement.
+3 - dans les pays qui nécessitent les codes USSD pour confirmer le paiement avec un code otp tu confirmes de façon à ce que l'utilisateur puisse voir le code qu'il doit saisir sur son téléphone pour recevoir le code otp avec un message exemple : VEILLEZ COMPOSER *144*4*6*MONTANT# POUR OPTENIR LE CODE OTP ET CONFIRMER VOTRE PAIEMENT 
+Consulte la documentation et sur chaque moyens de paiement qui nécessite le otp tu intègres le code que l'utilisateur doit saisir sur son téléphone selon le pays et le moyen de paiement.
+4 - les paiements par wave redirigent l'utilisateur dans l'application wave pour confirmer le paiement je veux que tu consultes également la documentation et tu intègres ça correctement 
+Voilà la d'occupation : https://docs.afribapay.com/#ff18037a-262c-4873-85da-864492ce7148
+
+Tu utilise ce endpoint "api.afribapay.com/v1/countries" pour récupérer les pays avec leurs opérateurs et devise
