@@ -1,7 +1,10 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
 # compiled output
+# dist — excluded globally EXCEPT the pre-built client
 dist
+!client/dist
+!client/dist/**
 tmp
 out-tsc
 *.tsbuildinfo
@@ -47,3 +50,11 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+.agents/
+.replit
+.replitignore
+attached_assets/
+pnpm-lock.yaml
+artifacts/
+lib/
+scripts/
