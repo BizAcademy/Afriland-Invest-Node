@@ -35,19 +35,35 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadData();
-    loadPosts();
-    loadAnnonces();
+    // Chargement initial en PARALLÈLE (au lieu de 3 requêtes l'une après l'autre).
+    Promise.all([loadData(), loadPosts(), loadAnnonces()]);
 
     const notifTimer = setInterval(() => setNotifIdx(i => (i + 1) % FAUX_NOTIFS.length), 3000);
     setTimeout(() => setShowPopup(true), 1500);
-    // Polling annonces toutes les 30s (affichage EN DIRECT)
-    annTimerRef.current = setInterval(loadAnnonces, 30000);
+
+    // Polling annonces toutes les 30s, mais UNIQUEMENT quand l'onglet est visible :
+    // économise le réseau et ne ralentit pas l'app quand elle est en arrière-plan.
+    const startAnnPolling = () => {
+      if (annTimerRef.current) clearInterval(annTimerRef.current);
+      annTimerRef.current = setInterval(loadAnnonces, 30000);
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearInterval(annTimerRef.current);
+        annTimerRef.current = null;
+      } else {
+        loadAnnonces();
+        startAnnPolling();
+      }
+    };
+    if (!document.hidden) startAnnPolling();
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       clearInterval(notifTimer);
       clearInterval(annTimerRef.current);
       clearInterval(slideTimerRef.current);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
 

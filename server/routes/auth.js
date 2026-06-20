@@ -31,7 +31,7 @@ router.post('/login', async (req, res) => {
 
     const { data: user, error } = await supabase
       .from('utilisateurs')
-      .select('*')
+      .select('id,nom,telephone,pays,role,code_parrainage,lien_parrainage,mot_de_passe')
       .eq('telephone', full_tel)
       .single();
 
@@ -120,7 +120,7 @@ router.post('/register', async (req, res) => {
         lien_parrainage: `${appUrl}?p=${code}`,
         role: 'user',
       })
-      .select()
+      .select('id,nom,telephone,pays,lien_parrainage')
       .single();
 
     if (insertError) throw insertError;

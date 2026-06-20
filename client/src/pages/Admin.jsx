@@ -83,8 +83,15 @@ export default function Admin() {
   useEffect(() => {
     loadAll();
     loadOperators();
-    const interval = setInterval(() => refreshStats(), 30000);
-    return () => clearInterval(interval);
+    // Rafraîchissement des stats toutes les 30s, mais SEULEMENT quand l'onglet
+    // est visible (évite des requêtes inutiles quand l'admin est ailleurs).
+    let interval = null;
+    const start = () => { if (!interval) interval = setInterval(() => refreshStats(), 30000); };
+    const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
+    const onVisibility = () => { if (document.hidden) stop(); else { refreshStats(); start(); } };
+    if (!document.hidden) start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
   }, []);
 
   const loadOperators = async () => {

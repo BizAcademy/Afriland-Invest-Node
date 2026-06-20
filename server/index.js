@@ -4,12 +4,12 @@ const fs = require('fs');
 // ─── Diagnostic de démarrage ────────────────────────────────────────────────
 // Si l'app plante au démarrage (typiquement sous Passenger/Plesk où l'erreur
 // réelle est masquée en production), on écrit la trace complète dans un fichier
-// web-accessible : client/dist/_diag.txt  →  https://<domaine>/_diag.txt
+// NON accessible depuis le web : _diag.txt à la racine du projet (hors client/dist).
 // Les handlers sont enregistrés AVANT les require() pour capturer aussi les
 // erreurs de chargement de module (la cause n°1 d'un crash au boot).
 function writeStartupDiag(label, err) {
   try {
-    const file = path.join(__dirname, '..', 'client', 'dist', '_diag.txt');
+    const file = path.join(__dirname, '..', '_diag.txt');
     const msg = err && err.stack ? err.stack : String(err);
     fs.writeFileSync(file, `[${new Date().toISOString()}] ${label}\nNode ${process.version}\n${msg}\n`);
   } catch (_) { /* best-effort : on ignore les erreurs disque */ }
@@ -26,35 +26,11 @@ process.on('unhandledRejection', (reason) => {
 });
 
 const ENV_PATH = path.join(__dirname, '..', '.env');
-const ENV_FILE_EXISTS = fs.existsSync(ENV_PATH);
 require('dotenv').config({ path: ENV_PATH });
-
-// ─── Diagnostic des variables d'environnement (TEMPORAIRE) ───────────────────
-// Écrit dans client/dist/_env-check.txt (web-accessible : /_env-check.txt) la
-// PRÉSENCE de chaque clé critique — JAMAIS la valeur. Permet de confirmer, sans
-// accès console, si Plesk lit bien les clés Supabase. À retirer après diagnostic.
-(function writeEnvCheck() {
-  try {
-    const present = (k) => (process.env[k] && String(process.env[k]).trim() !== '' ? 'présent ✅' : 'ABSENT ❌');
-    const lines = [
-      'Vérification des variables (PRÉSENCE uniquement, aucune valeur affichée)',
-      `[${new Date().toISOString()}]  Node ${process.version}`,
-      `Fichier .env trouvé (${ENV_PATH}) : ${ENV_FILE_EXISTS ? 'OUI' : 'NON'}`,
-      '',
-      `SUPABASE_URL          : ${present('SUPABASE_URL')}`,
-      `SUPABASE_SERVICE_KEY  : ${present('SUPABASE_SERVICE_KEY')}`,
-      `SUPABASE_ANON_KEY     : ${present('SUPABASE_ANON_KEY')}`,
-      `DATABASE_URL          : ${present('DATABASE_URL')}`,
-      `SESSION_SECRET        : ${present('SESSION_SECRET')}`,
-      `JWT_SECRET            : ${present('JWT_SECRET')}`,
-      `APP_URL               : ${present('APP_URL')}`,
-    ];
-    fs.writeFileSync(path.join(__dirname, '..', 'client', 'dist', '_env-check.txt'), lines.join('\n') + '\n');
-  } catch (_) { /* best-effort */ }
-})();
 
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const helmet = require('helmet');
 const morgan = require('morgan');
 // node-cron est optionnel : si le module est absent ou incompatible avec la
@@ -85,11 +61,24 @@ const PORT = process.env.PORT || 3000;
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
+// Compression gzip de TOUTES les réponses (bundle JS, CSS, JSON des API).
+// Gain majeur : le bundle React (~400 Ko) tombe à ~120 Ko sur le réseau.
+app.use(compression());
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Images uploadées (preuves de dépôt, affiches) : noms uniques → cache 7 jours.
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), { maxAge: '7d' }));
+
+// Réponses API = données dynamiques : jamais mises en cache (toujours fraîches).
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
+// Endpoint de santé ultra-léger (réveil de l'app / monitoring, sans toucher la BD).
+app.get('/api/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
@@ -106,11 +95,23 @@ app.use('/api/public', publicRoutes);
 app.use('/api/demo', demoRoutes);
 
 const clientBuildPath = path.join(__dirname, '../client/dist');
-app.use(express.static(clientBuildPath));
+app.use(express.static(clientBuildPath, {
+  setHeaders: (res, filePath) => {
+    // Fichiers Vite dans /assets versionnés par hash → cache 1 an immuable
+    // (le navigateur ne les re-télécharge jamais). index.html et les .txt de
+    // diagnostic restent non mis en cache pour toujours servir la dernière version.
+    if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  },
+}));
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'Route non trouvée' });
   }
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
 
@@ -147,21 +148,34 @@ app.listen(PORT, () => {
   // Démarrage réussi : on efface tout ancien _diag.txt pour que sa présence
   // signale toujours un VRAI crash récent (et non une erreur déjà corrigée).
   try {
-    const diag = path.join(__dirname, '..', 'client', 'dist', '_diag.txt');
+    const diag = path.join(__dirname, '..', '_diag.txt');
     if (fs.existsSync(diag)) fs.unlinkSync(diag);
   } catch (_) { /* best-effort */ }
 
   // Tout le reste (vérif Supabase, crédit journalier, cron) est exécuté en
   // arrière-plan et entièrement protégé : une erreur ici ne doit JAMAIS
   // empêcher le serveur de servir les pages (login, etc.).
+  // On DIFFÈRE ces tâches de quelques secondes pour qu'elles ne concurrencent
+  // pas les toutes premières requêtes après un réveil (cold-start Passenger) —
+  // c'est ce qui pouvait ralentir/faire échouer la 1re connexion.
+  setTimeout(() => {
   (async () => {
+    // Test Supabase réel au démarrage (résultat uniquement dans les logs serveur,
+    // plus aucun fichier web-accessible). supabase-js ne "throw" pas sur une
+    // mauvaise clé : il renvoie { error }, qu'on capture comme l'exception réseau.
     try {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('utilisateurs')
         .select('*', { count: 'exact', head: true });
-      console.log(`✅ Supabase connecté — ${count || 0} utilisateur(s) en base`);
+      if (error) {
+        console.error('[STARTUP] Supabase erreur:', error.message,
+          error.code ? '| code: ' + error.code : '',
+          error.hint ? '| hint: ' + error.hint : '');
+      } else {
+        console.log(`✅ Supabase connecté — ${count ?? 0} utilisateur(s) en base`);
+      }
     } catch (err) {
-      console.error('[STARTUP] Vérification Supabase échouée :', err.message);
+      console.error('[STARTUP] Vérification Supabase échouée (réseau) :', err.message);
     }
 
     // Préchauffe le cache des pays/opérateurs (mémoire + disque) pour que la
@@ -193,6 +207,7 @@ app.listen(PORT, () => {
       }
     }
   })();
+  }, 4000);
 });
 
 // (Les handlers process.on('uncaughtException'/'unhandledRejection') sont

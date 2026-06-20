@@ -46,15 +46,8 @@ const supabasePublic = createClient(supabaseUrl || DUMMY_URL, supabaseAnonKey ||
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-if (supabaseUrl && supabaseServiceKey) {
-  supabase.from('utilisateurs').select('id', { count: 'exact', head: true })
-    .then(({ count, error }) => {
-      if (error) {
-        console.error('❌ Erreur connexion Supabase:', error.message);
-      } else {
-        console.log(`✅ Supabase connecté — ${count ?? 0} utilisateur(s) en base`);
-      }
-    });
-}
+// Note : le test de connexion Supabase au démarrage est fait UNE seule fois
+// dans server/index.js (différé après le boot, écrit dans _env-check.txt). On
+// évite ici un 2e appel réseau redondant qui ralentissait le démarrage.
 
 module.exports = { supabase, supabasePublic };
