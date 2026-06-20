@@ -46,6 +46,7 @@ export default function Admin() {
   const [newPassword, setNewPassword] = useState('');
   const [newTxPassword, setNewTxPassword] = useState('');
   const [actionPassword, setActionPassword] = useState('');
+  const [toggleCommandeId, setToggleCommandeId] = useState(null);
 
   // Recherche / filtre pays (onglet Utilisateurs uniquement)
   const [userSearch, setUserSearch] = useState('');
@@ -292,6 +293,20 @@ export default function Admin() {
       toast.success('Solde réduit ✅'); setDebitAmount(''); setActionPassword(''); refreshUserDetail(userModal); loadAll();
     } catch (err) { toast.error(err.response?.data?.error || 'Erreur'); }
   };
+  // Activer / désactiver un plan d'investissement. Désactivé => le plan ne reçoit
+  // plus de revenu journalier (réactivable à tout moment).
+  const handleToggleCommande = async (pl) => {
+    if (!actionPassword) return toast.error("Saisissez le mot de passe d'action (ci-dessous)");
+    const disabling = pl.statut === 'actif';
+    if (disabling && !window.confirm(`Désactiver le plan « ${pl.nom} » ? Il cessera de générer des revenus journaliers (réactivable plus tard).`)) return;
+    setToggleCommandeId(pl.id);
+    try {
+      const res = await api.put(`/admin/commandes/${pl.id}/toggle`, { action_password: actionPassword });
+      toast.success(res.data?.message || 'Plan mis à jour ✅');
+      refreshUserDetail(userModal); loadAll();
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur'); }
+    finally { setToggleCommandeId(null); }
+  };
   const handleChangePassword = async () => {
     if (!newPassword || newPassword.length < 6) return toast.error('Mot de passe : 6 caractères minimum');
     if (!actionPassword) return toast.error("Saisissez le mot de passe d'action");
@@ -522,7 +537,7 @@ export default function Admin() {
   };
 
   const fmt = (n) => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0));
-  const statusColor = { valide: 'green', en_attente: 'yellow', rejete: 'red' };
+  const statusColor = { valide: 'green', en_attente: 'yellow', rejete: 'red', desactive: 'red' };
 
   const TABS = [
     { key: 'dashboard', label: 'Dashboard', icon: 'fa-tachometer-alt' },
@@ -595,14 +610,36 @@ export default function Admin() {
 
                 {/* Plans achetés */}
                 <div style={{ marginBottom: 14 }}>
-                  <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Plans d'investissement ({userDetail.plans.length})</p>
+                  <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>Plans d'investissement ({userDetail.plans.length})</p>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Désactiver un plan stoppe ses revenus journaliers (réactivable). Nécessite le mot de passe d'action ci-dessous.</p>
                   {userDetail.plans.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Aucun plan acheté</p>}
-                  {userDetail.plans.map((pl) => (
-                    <div key={pl.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                      <span style={{ fontSize: 13 }}>{pl.nom} <span className={`badge badge-${statusColor[pl.statut] || 'yellow'}`} style={{ marginLeft: 4 }}>{pl.statut}</span></span>
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>{fmt(pl.montant)} FCFA</span>
-                    </div>
-                  ))}
+                  {userDetail.plans.map((pl) => {
+                    const togglable = pl.statut === 'actif' || pl.statut === 'desactive';
+                    const isDisabled = pl.statut === 'desactive';
+                    return (
+                      <div key={pl.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <span style={{ fontSize: 13 }}>{pl.nom} <span className={`badge badge-${statusColor[pl.statut] || 'yellow'}`} style={{ marginLeft: 4 }}>{isDisabled ? 'désactivé' : pl.statut}</span></span>
+                          <p style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{fmt(pl.montant)} FCFA</p>
+                        </div>
+                        {togglable && (
+                          <button
+                            onClick={() => handleToggleCommande(pl)}
+                            disabled={toggleCommandeId === pl.id}
+                            style={{
+                              flexShrink: 0, padding: '7px 12px', borderRadius: 8, border: 'none',
+                              cursor: toggleCommandeId === pl.id ? 'default' : 'pointer', fontWeight: 600, fontSize: 12,
+                              background: isDisabled ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.12)',
+                              color: isDisabled ? 'var(--green-primary)' : '#ef4444', opacity: toggleCommandeId === pl.id ? 0.6 : 1,
+                            }}
+                          >
+                            <i className={`fas ${isDisabled ? 'fa-play' : 'fa-pause'}`} style={{ marginRight: 5 }} />
+                            {toggleCommandeId === pl.id ? '…' : (isDisabled ? 'Réactiver' : 'Désactiver')}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Transactions de l'utilisateur (solde avant / après) */}
@@ -1117,7 +1154,7 @@ export default function Admin() {
         <div>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>
             <i className="fas fa-dharmachakra" style={{ marginRight: 6, color: 'var(--green-primary)' }} />
-            Gains de la plateforme générés par la <strong>roue tournante</strong> uniquement (mises encaissées − bonus reversés).
+            Revenus de la plateforme issus <strong>uniquement des mises perdues par les joueurs</strong> à la roue (mises encaissées − bonus reversés).
           </p>
 
           {/* Filtre de période */}
@@ -1143,7 +1180,7 @@ export default function Admin() {
               {/* Cartes récapitulatives */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
                 <div className="card" style={{ background: 'linear-gradient(135deg,rgba(27,42,107,0.12),rgba(0,0,0,0.06))' }}>
-                  <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Gain net plateforme</p>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Revenus des mises perdues</p>
                   <p style={{ fontSize: 22, fontWeight: 800, color: (wheelStats?.summary?.netGain ?? 0) >= 0 ? 'var(--green-primary)' : 'var(--error)' }}>
                     {fmt(wheelStats?.summary?.netGain)} F
                   </p>
@@ -1164,13 +1201,17 @@ export default function Admin() {
 
               {/* Courbe */}
               <div className="card" style={{ marginBottom: 16 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>
                   <i className="fas fa-chart-line" style={{ marginRight: 6, color: 'var(--green-primary)' }} />
-                  Évolution du gain net {wheelPeriod === 'today' ? "(aujourd'hui, par heure)" : wheelPeriod === 'yesterday' ? '(jour passé, par heure)' : '(par jour)'}
+                  Revenus des mises perdues {wheelPeriod === 'today' ? "(aujourd'hui, par heure)" : wheelPeriod === 'yesterday' ? '(jour passé, par heure)' : '(par jour)'}
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                  <i className="fas fa-hand-pointer" style={{ marginRight: 5 }} />Touchez un point de la courbe pour voir le montant gagné.
                 </p>
                 <MiniLineChart
                   data={(wheelStats?.chart || []).map(c => ({ label: c.label, value: c.net }))}
                   color="var(--green-primary)"
+                  unit="F"
                 />
               </div>
 

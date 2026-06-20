@@ -330,6 +330,56 @@ router.put('/users/:id/credit', adminMiddleware, async (req, res) => {
   }
 });
 
+// Activer / désactiver un plan d'investissement (commande) d'un utilisateur.
+// Désactivé => le plan est EXCLU de credit_daily_revenues() (qui ne crédite que
+// les commandes 'actif') : il ne reçoit donc plus aucun revenu journalier tant
+// qu'il n'est pas réactivé. En réactivant, on remet l'ancre de versement à
+// maintenant (last_revenue_at = now) afin qu'AUCUN revenu rétroactif ne soit
+// versé pour la période de désactivation ; le prochain revenu tombera 24h après.
+router.put('/commandes/:id/toggle', adminMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Plan invalide' });
+    if (!(await requireActionPassword(req, res))) return;
+
+    const { data: cmd, error: e1 } = await supabase
+      .from('commandes').select('id, statut, date_fin').eq('id', id).maybeSingle();
+    if (e1) throw e1;
+    if (!cmd) return res.status(404).json({ error: 'Plan introuvable' });
+    if (cmd.statut !== 'actif' && cmd.statut !== 'desactive') {
+      return res.status(400).json({ error: `Ce plan ne peut pas être modifié (statut : ${cmd.statut})` });
+    }
+
+    const nextStatut = cmd.statut === 'actif' ? 'desactive' : 'actif';
+
+    // Réactivation : on refuse si le plan est déjà arrivé à échéance. On reproduit
+    // la logique du cron (credit_daily_revenues) : la prochaine échéance après
+    // réactivation tomberait à now()+24h ; si sa date dépasse date_fin, le cron
+    // clôturerait aussitôt la commande sans aucun versement → réactiver est inutile.
+    if (nextStatut === 'actif' && cmd.date_fin) {
+      const nextDueDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      if (nextDueDate > cmd.date_fin) {
+        return res.status(400).json({ error: 'Ce plan est arrivé à échéance (date de fin atteinte) : il ne peut plus être réactivé.' });
+      }
+    }
+
+    const patch = { statut: nextStatut };
+    if (nextStatut === 'actif') patch.last_revenue_at = new Date().toISOString();
+
+    const { error: e2 } = await supabase.from('commandes').update(patch).eq('id', id);
+    if (e2) throw e2;
+
+    res.json({
+      success: true,
+      statut: nextStatut,
+      message: nextStatut === 'desactive' ? 'Plan désactivé — il ne reçoit plus de revenu journalier' : 'Plan réactivé',
+    });
+  } catch (err) {
+    console.error('toggle commande error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Détails complets d'un utilisateur (admin)
 router.get('/users/:id', adminMiddleware, async (req, res) => {
   try {
