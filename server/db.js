@@ -1,7 +1,15 @@
 const { createClient } = require('@supabase/supabase-js');
 
+// Polyfill WebSocket pour les environnements Node anciens (< 22) au cas où
+// Supabase Realtime serait sollicité. Le require est protégé : si le module
+// "ws" n'est pas installé sur l'hébergeur (ex. Plesk), on continue SANS planter.
+// Les routes REST/Auth de Supabase utilisent fetch, pas WebSocket — aucun impact.
 if (typeof globalThis.WebSocket === 'undefined') {
-  globalThis.WebSocket = require('ws');
+  try {
+    globalThis.WebSocket = require('ws');
+  } catch (e) {
+    console.warn('[db] Module "ws" indisponible, WebSocket non polyfillé (sans impact sur les routes REST/Auth) :', e.message);
+  }
 }
 
 const supabaseUrl = process.env.SUPABASE_URL;

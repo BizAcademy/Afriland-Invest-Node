@@ -117,6 +117,13 @@ async function runDailyRevenues() {
 app.listen(PORT, () => {
   console.log(`AFRILAND INVEST server running on port ${PORT}`);
 
+  // Démarrage réussi : on efface tout ancien _diag.txt pour que sa présence
+  // signale toujours un VRAI crash récent (et non une erreur déjà corrigée).
+  try {
+    const diag = path.join(__dirname, '..', 'client', 'dist', '_diag.txt');
+    if (fs.existsSync(diag)) fs.unlinkSync(diag);
+  } catch (_) { /* best-effort */ }
+
   // Tout le reste (vérif Supabase, crédit journalier, cron) est exécuté en
   // arrière-plan et entièrement protégé : une erreur ici ne doit JAMAIS
   // empêcher le serveur de servir les pages (login, etc.).
