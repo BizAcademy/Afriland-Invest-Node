@@ -1,0 +1,11 @@
+Vérification des variables (PRÉSENCE uniquement, aucune valeur affichée)
+[2026-06-20T16:49:10.661Z]  Node v24.13.0
+Fichier .env trouvé (/home/runner/workspace/Afriland-Invest-Node/.env) : NON
+
+SUPABASE_URL          : présent ✅
+SUPABASE_SERVICE_KEY  : présent ✅
+SUPABASE_ANON_KEY     : présent ✅
+DATABASE_URL          : présent ✅
+SESSION_SECRET        : présent ✅
+JWT_SECRET            : présent ✅
+APP_URL               : ABSENT ❌

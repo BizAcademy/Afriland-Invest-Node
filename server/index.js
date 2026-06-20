@@ -25,7 +25,34 @@ process.on('unhandledRejection', (reason) => {
   console.error('[UNHANDLED REJECTION]', reason);
 });
 
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const ENV_PATH = path.join(__dirname, '..', '.env');
+const ENV_FILE_EXISTS = fs.existsSync(ENV_PATH);
+require('dotenv').config({ path: ENV_PATH });
+
+// ─── Diagnostic des variables d'environnement (TEMPORAIRE) ───────────────────
+// Écrit dans client/dist/_env-check.txt (web-accessible : /_env-check.txt) la
+// PRÉSENCE de chaque clé critique — JAMAIS la valeur. Permet de confirmer, sans
+// accès console, si Plesk lit bien les clés Supabase. À retirer après diagnostic.
+(function writeEnvCheck() {
+  try {
+    const present = (k) => (process.env[k] && String(process.env[k]).trim() !== '' ? 'présent ✅' : 'ABSENT ❌');
+    const lines = [
+      'Vérification des variables (PRÉSENCE uniquement, aucune valeur affichée)',
+      `[${new Date().toISOString()}]  Node ${process.version}`,
+      `Fichier .env trouvé (${ENV_PATH}) : ${ENV_FILE_EXISTS ? 'OUI' : 'NON'}`,
+      '',
+      `SUPABASE_URL          : ${present('SUPABASE_URL')}`,
+      `SUPABASE_SERVICE_KEY  : ${present('SUPABASE_SERVICE_KEY')}`,
+      `SUPABASE_ANON_KEY     : ${present('SUPABASE_ANON_KEY')}`,
+      `DATABASE_URL          : ${present('DATABASE_URL')}`,
+      `SESSION_SECRET        : ${present('SESSION_SECRET')}`,
+      `JWT_SECRET            : ${present('JWT_SECRET')}`,
+      `APP_URL               : ${present('APP_URL')}`,
+    ];
+    fs.writeFileSync(path.join(__dirname, '..', 'client', 'dist', '_env-check.txt'), lines.join('\n') + '\n');
+  } catch (_) { /* best-effort */ }
+})();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
