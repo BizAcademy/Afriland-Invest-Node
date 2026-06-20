@@ -960,31 +960,6 @@ router.post('/operator-logos', adminMiddleware, upload.single('image'), async (r
   }
 });
 
-// ─── COMMANDES (packs souscrits par les utilisateurs) ────────────────────────
-
-// Désactiver un pack d'investissement actif d'un utilisateur
-router.put('/commandes/:id/deactivate', adminMiddleware, async (req, res) => {
-  try {
-    if (!(await requireActionPassword(req, res))) return;
-    const commandeId = parseInt(req.params.id);
-    if (isNaN(commandeId)) return res.status(400).json({ error: 'ID invalide' });
-    const { data, error } = await supabase
-      .from('commandes')
-      .update({ statut: 'annule' })
-      .eq('id', commandeId)
-      .eq('statut', 'actif')
-      .select('id');
-    if (error) throw error;
-    if (!data || data.length === 0) {
-      return res.status(400).json({ error: 'Pack introuvable ou déjà désactivé' });
-    }
-    res.json({ success: true, message: 'Pack désactivé avec succès' });
-  } catch (err) {
-    console.error('Deactivate commande error:', err);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
 // ─── PLANS D'INVESTISSEMENT ───────────────────────────────────────────────────
 
 router.get('/plans', adminMiddleware, async (req, res) => {

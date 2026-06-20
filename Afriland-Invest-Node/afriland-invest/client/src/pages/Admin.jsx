@@ -302,17 +302,6 @@ export default function Admin() {
     } catch (err) { toast.error(err.response?.data?.error || 'Erreur'); }
   };
 
-  const handleDeactivatePlan = async (commandeId) => {
-    if (!actionPassword) return toast.error("Saisissez d'abord le mot de passe d'action");
-    if (!confirm('Désactiver ce pack ? Les revenus journaliers seront arrêtés immédiatement.')) return;
-    try {
-      await api.put(`/admin/commandes/${commandeId}/deactivate`, { action_password: actionPassword });
-      toast.success('Pack désactivé ✅');
-      setActionPassword('');
-      refreshUserDetail(userModal);
-    } catch (err) { toast.error(err.response?.data?.error || 'Erreur'); }
-  };
-
   // ── Settings ──
   const saveSettings = async () => {
     try {
@@ -602,26 +591,9 @@ export default function Admin() {
                   <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Plans d'investissement ({userDetail.plans.length})</p>
                   {userDetail.plans.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Aucun plan acheté</p>}
                   {userDetail.plans.map((pl) => (
-                    <div key={pl.id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 13 }}>{pl.nom} <span className={`badge badge-${statusColor[pl.statut] || 'yellow'}`} style={{ marginLeft: 4 }}>{pl.statut}</span></span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{fmt(pl.montant)} FCFA</span>
-                          {pl.statut === 'actif' && (
-                            <button
-                              onClick={() => handleDeactivatePlan(pl.id)}
-                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--red, #ef4444)', background: 'rgba(239,68,68,0.1)', color: 'var(--red, #ef4444)', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                            >
-                              <i className="fas fa-ban" style={{ marginRight: 3 }} />Désactiver
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      {pl.date_debut && (
-                        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                          Du {new Date(pl.date_debut).toLocaleDateString('fr-FR')} au {new Date(pl.date_fin).toLocaleDateString('fr-FR')}
-                        </p>
-                      )}
+                    <div key={pl.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                      <span style={{ fontSize: 13 }}>{pl.nom} <span className={`badge badge-${statusColor[pl.statut] || 'yellow'}`} style={{ marginLeft: 4 }}>{pl.statut}</span></span>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{fmt(pl.montant)} FCFA</span>
                     </div>
                   ))}
                 </div>
