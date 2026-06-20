@@ -1,4 +1,30 @@
 const path = require('path');
+const fs = require('fs');
+
+// ─── Diagnostic de démarrage ────────────────────────────────────────────────
+// Si l'app plante au démarrage (typiquement sous Passenger/Plesk où l'erreur
+// réelle est masquée en production), on écrit la trace complète dans un fichier
+// web-accessible : client/dist/_diag.txt  →  https://<domaine>/_diag.txt
+// Les handlers sont enregistrés AVANT les require() pour capturer aussi les
+// erreurs de chargement de module (la cause n°1 d'un crash au boot).
+function writeStartupDiag(label, err) {
+  try {
+    const file = path.join(__dirname, '..', 'client', 'dist', '_diag.txt');
+    const msg = err && err.stack ? err.stack : String(err);
+    fs.writeFileSync(file, `[${new Date().toISOString()}] ${label}\nNode ${process.version}\n${msg}\n`);
+  } catch (_) { /* best-effort : on ignore les erreurs disque */ }
+}
+
+process.on('uncaughtException', (err) => {
+  writeStartupDiag('UNCAUGHT EXCEPTION', err);
+  console.error('[UNCAUGHT EXCEPTION]', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  writeStartupDiag('UNHANDLED REJECTION', reason);
+  console.error('[UNHANDLED REJECTION]', reason);
+});
+
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const cors = require('cors');
@@ -135,15 +161,6 @@ app.listen(PORT, () => {
   })();
 });
 
-// Les rejets de promesses non gérés (souvent des tâches d'arrière-plan) sont
-// loggués sans tuer le serveur — les routes critiques ont déjà leur try/catch.
-process.on('unhandledRejection', (reason) => {
-  console.error('[UNHANDLED REJECTION]', reason);
-});
-// En revanche, après une exception non capturée l'état de Node est indéfini :
-// on logge puis on quitte proprement pour laisser l'hébergeur redémarrer le
-// process dans un état sain (fail-fast, pratique standard en production).
-process.on('uncaughtException', (err) => {
-  console.error('[UNCAUGHT EXCEPTION]', err);
-  process.exit(1);
-});
+// (Les handlers process.on('uncaughtException'/'unhandledRejection') sont
+//  enregistrés tout en haut du fichier pour capturer aussi les erreurs de
+//  chargement de module au démarrage — voir writeStartupDiag.)
