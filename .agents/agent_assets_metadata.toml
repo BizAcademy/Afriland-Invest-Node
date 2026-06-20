@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "pAb5Snblg6Z3V5akrXXex"
+uri = "file://Afriland-Invest-Node/afriland-deploy.tar.gz"
+type = "unspecified"
+title = "Afriland Invest — fichiers à déployer sur Plesk"
