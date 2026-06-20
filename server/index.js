@@ -30,7 +30,16 @@ require('dotenv').config({ path: ENV_PATH });
 
 const express = require('express');
 const cors = require('cors');
-const compression = require('compression');
+// compression est OPTIONNEL : si le module n'est pas installé sur l'hébergeur
+// (ex. "npm install" pas encore lancé après un déploiement), on NE fait PAS
+// planter le serveur — on désactive simplement la compression gzip.
+// Même protection que pour node-cron plus bas.
+let compression = null;
+try {
+  compression = require('compression');
+} catch (e) {
+  console.warn('[STARTUP] Module "compression" absent — gzip désactivée. Lancez "npm install" sur l\'hébergeur pour l\'activer.');
+}
 const helmet = require('helmet');
 const morgan = require('morgan');
 // node-cron est optionnel : si le module est absent ou incompatible avec la
@@ -63,7 +72,8 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 // Compression gzip de TOUTES les réponses (bundle JS, CSS, JSON des API).
 // Gain majeur : le bundle React (~400 Ko) tombe à ~120 Ko sur le réseau.
-app.use(compression());
+// Activée uniquement si le module est présent (voir require optionnel plus haut).
+if (compression) app.use(compression());
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
