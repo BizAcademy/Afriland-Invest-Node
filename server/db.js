@@ -1,15 +1,30 @@
 const { createClient } = require('@supabase/supabase-js');
 
-// Polyfill WebSocket pour les environnements Node anciens (< 22) au cas où
-// Supabase Realtime serait sollicité. Le require est protégé : si le module
-// "ws" n'est pas installé sur l'hébergeur (ex. Plesk), on continue SANS planter.
-// Les routes REST/Auth de Supabase utilisent fetch, pas WebSocket — aucun impact.
+// ─── WebSocket pour Supabase ────────────────────────────────────────────────
+// Node 22+ a un WebSocket natif. Les Node plus anciens (ex. Plesk en Node 21)
+// n'en ont pas : @supabase/supabase-js REFUSE alors de se construire (il lève
+// "Node.js X detected without native WebSocket support") — ce qui faisait
+// planter TOUT le serveur au démarrage, donc échouer connexion/inscription.
+// On garantit qu'un constructeur WebSocket est TOUJOURS présent sur globalThis
+// AVANT de créer le client, dans cet ordre :
+//   1) WebSocket natif s'il existe (Node 22+) ;
+//   2) sinon le module "ws" s'il est installé ;
+//   3) sinon un stub inoffensif — l'app n'utilise PAS le temps réel (Realtime),
+//      donc ce stub n'est jamais instancié ; il sert juste à laisser Supabase
+//      se construire pour que les routes REST/Auth fonctionnent.
 if (typeof globalThis.WebSocket === 'undefined') {
+  let WS;
   try {
-    globalThis.WebSocket = require('ws');
-  } catch (e) {
-    console.warn('[db] Module "ws" indisponible, WebSocket non polyfillé (sans impact sur les routes REST/Auth) :', e.message);
+    WS = require('ws');
+  } catch (_) {
+    WS = class StubWebSocket {
+      constructor() {
+        throw new Error('WebSocket indisponible (module "ws" absent) — Realtime non supporté ; sans impact sur les routes REST/Auth.');
+      }
+    };
+    console.warn('[db] Module "ws" absent : Realtime désactivé (REST/Auth fonctionnent normalement).');
   }
+  globalThis.WebSocket = WS;
 }
 
 const supabaseUrl = process.env.SUPABASE_URL;
