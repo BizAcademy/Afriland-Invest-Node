@@ -115,8 +115,10 @@ BEGIN
         ON CONFLICT (user_id) DO UPDATE
           SET solde = soldes.solde + v_montant, date_maj = NOW();
 
-        INSERT INTO historique_revenus (user_id, montant, type)
-        VALUES (v_parrain, v_montant, 'parrainage');
+        -- i = profondeur dans la chaîne de parrainage = niveau de la commission
+        -- (1 = parrain direct, 2 = grand-parrain, 3 = arrière-grand-parrain).
+        INSERT INTO historique_revenus (user_id, montant, type, niveau)
+        VALUES (v_parrain, v_montant, 'parrainage', i);
       END IF;
       v_visited := array_append(v_visited, v_parrain);
       SELECT parrain_id INTO v_parrain FROM utilisateurs WHERE id = v_parrain;

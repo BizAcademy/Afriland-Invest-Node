@@ -119,6 +119,8 @@ CREATE TABLE IF NOT EXISTS historique_revenus (
   commande_id INT,
   montant DECIMAL(15,2) NOT NULL,
   type VARCHAR(30) NOT NULL,
+  -- Pour les commissions de parrainage : niveau 1/2/3 (NULL pour les autres types).
+  niveau SMALLINT,
   date_paiement TIMESTAMP DEFAULT NOW()
 );
 

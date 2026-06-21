@@ -27,6 +27,16 @@ export const STATUT_BADGE = {
 export const fmt = (n) => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0));
 export const fmtDate = (d) => d ? new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
+// Libellé d'une transaction. Pour une commission de parrainage, on précise le
+// niveau (1/2/3) quand il est connu ; sinon on garde le libellé générique.
+export const txLabel = (t) => {
+  if (!t) return '';
+  if (t.kind === 'parrainage' && t.details?.niveau) {
+    return `Commission de parrainage niveau ${t.details.niveau}`;
+  }
+  return (KIND_CONFIG[t.kind] || {}).label || t.label || '';
+};
+
 function ReceiptRow({ label, value }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
@@ -45,7 +55,7 @@ export default function TransactionReceipt({ receipt, onClose }) {
         <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, marginBottom: 16 }}>Reçu de transaction</p>
 
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{(KIND_CONFIG[receipt.kind] || {}).label || receipt.label}</p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{txLabel(receipt)}</p>
           <p style={{ fontSize: 26, fontWeight: 800, color: receipt.sens === '+' ? 'var(--green-primary)' : 'var(--text-primary)' }}>
             {receipt.sens}{fmt(receipt.montant)} FCFA
           </p>

@@ -699,13 +699,18 @@ router.get('/users/:id/transactions', adminMiddleware, async (req, res) => {
     for (const rev of revenusRes.data || []) {
       const montant = Math.abs(parseFloat(rev.montant || 0));
       const isDebit = DEBIT_TYPES.has(rev.type);
+      // Parrainage : on précise le niveau (1/2/3) reçu quand il est connu.
+      const niveau = rev.niveau || null;
+      const label = (rev.type === 'parrainage' && niveau)
+        ? `Commission de parrainage niveau ${niveau}`
+        : (REVENU_LABELS[rev.type] || 'Revenu');
       entries.push({
         id: `revenu-${rev.id}`, kind: rev.type,
-        label: REVENU_LABELS[rev.type] || 'Revenu',
+        label,
         montant, sens: isDebit ? '-' : '+', statut: 'valide',
         date: rev.date_paiement,
         delta: isDebit ? -montant : montant,
-        details: { type_revenu: rev.type },
+        details: { type_revenu: rev.type, niveau },
       });
     }
 

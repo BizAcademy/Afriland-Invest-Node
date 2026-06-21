@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../lib/api';
 import BottomNav from '../components/BottomNav';
 import Logo from '../components/Logo';
-import TransactionReceipt, { KIND_CONFIG, STATUT_LABEL, STATUT_BADGE, fmt, fmtDate } from '../components/TransactionReceipt';
+import TransactionReceipt, { KIND_CONFIG, STATUT_LABEL, STATUT_BADGE, fmt, fmtDate, txLabel } from '../components/TransactionReceipt';
 
 export default function Transactions() {
   const navigate = useNavigate();
@@ -87,7 +87,7 @@ export default function Transactions() {
                 <i className={`fas ${cfg.icon}`} style={{ color: cfg.color, fontSize: 16 }} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontWeight: 600, fontSize: 14 }}>{cfg.label}</p>
+                <p style={{ fontWeight: 600, fontSize: 14 }}>{txLabel(t)}</p>
                 <p style={{ color: 'var(--text-muted)', fontSize: 11 }}>{fmtDate(t.date)}</p>
               </div>
               <div style={{ textAlign: 'right' }}>

@@ -17,15 +17,21 @@ const REVENU_MAP = {
 function mapRevenu(r) {
   const m = REVENU_MAP[r.type] || { kind: 'revenu', label: 'Revenu investissement' };
   const montant = parseFloat(r.montant || 0);
+  // Pour le parrainage, on précise le niveau (1/2/3) quand il est connu.
+  // Les anciennes lignes sans niveau gardent le libellé générique.
+  const niveau = r.niveau || null;
+  const label = (r.type === 'parrainage' && niveau)
+    ? `Commission de parrainage niveau ${niveau}`
+    : m.label;
   return {
     id: `revenu-${r.id}`,
     kind: m.kind,
-    label: m.label,
+    label,
     montant: Math.abs(montant),
     sens: m.sens || (montant < 0 ? '-' : '+'),
     statut: 'valide',
     date: r.date_paiement,
-    details: { type_revenu: r.type, commande_id: r.commande_id || null },
+    details: { type_revenu: r.type, niveau, commande_id: r.commande_id || null },
   };
 }
 
