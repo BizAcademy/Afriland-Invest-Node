@@ -9,7 +9,13 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads')),
   filename:    (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
 });
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+// Sécurité : images uniquement. Empêche d'envoyer des fichiers .svg/.html/.js qui,
+// servis publiquement depuis /uploads, pourraient exécuter du code (risque XSS).
+const imageOnly = (req, file, cb) => {
+  if (/\.(jpe?g|png|webp|gif|hei[cf]|bmp)$/i.test(file.originalname || '')) cb(null, true);
+  else cb(new Error('Image uniquement (JPG, PNG, WEBP, GIF)'));
+};
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: imageOnly });
 
 // ─── Roue de la fortune ──────────────────────────────────────────────────────
 // Toute la logique (cycle de 10 tours, tirage, débit/crédit, historique) est
@@ -38,14 +44,17 @@ router.get('/', async (req, res) => {
 
 router.post('/', authMiddleware, upload.single('image'), async (req, res) => {
   try {
-    const { message } = req.body;
-    if (!message) return res.status(400).json({ error: 'Message requis' });
+    const message = (req.body.message || '').trim();
     const image = req.file ? req.file.filename : '';
+    // Une publication doit contenir au minimum une capture d'écran OU un message.
+    if (!message && !image) {
+      return res.status(400).json({ error: "Ajoutez une capture d'écran ou un message" });
+    }
     const { error } = await supabase
       .from('posts')
       .insert({ user_id: req.user.id, message, image, statut: 'en_attente' });
     if (error) throw error;
-    res.json({ success: true, message: 'Post soumis, en attente de validation' });
+    res.json({ success: true, message: 'Publication soumise, en attente de validation' });
   } catch { res.status(500).json({ error: 'Erreur serveur' }); }
 });
 

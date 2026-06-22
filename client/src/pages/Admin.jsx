@@ -73,6 +73,13 @@ export default function Admin() {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef();
 
+  // Création d'un post (admin)
+  const [postMsg, setPostMsg] = useState('');
+  const [postImageFile, setPostImageFile] = useState(null);
+  const [postImagePreview, setPostImagePreview] = useState(null);
+  const [postUploading, setPostUploading] = useState(false);
+  const postFileRef = useRef();
+
   // Gestion FAQ
   const [faqs, setFaqs] = useState([]);
   const [faqModal, setFaqModal] = useState(null);
@@ -540,6 +547,32 @@ export default function Admin() {
     if (!confirm('Supprimer cette affiche ?')) return;
     try { await api.delete(`/admin/annonces/${id}`); toast.success('Affiche supprimée'); loadAll(); }
     catch { toast.error('Erreur'); }
+  };
+
+  // ── Création de post (admin) ──
+  const handlePostFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return toast.error('Sélectionnez une image');
+    setPostImageFile(file);
+    setPostImagePreview(URL.createObjectURL(file));
+  };
+
+  const createPost = async () => {
+    if (!postMsg.trim() && !postImageFile) return toast.error('Ajoutez une image ou un message');
+    setPostUploading(true);
+    try {
+      const fd = new FormData();
+      if (postMsg.trim()) fd.append('message', postMsg.trim());
+      if (postImageFile) fd.append('image', postImageFile);
+      await api.post('/admin/posts', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      toast.success('Post publié ✅');
+      setPostMsg(''); setPostImageFile(null); setPostImagePreview(null);
+      if (postFileRef.current) postFileRef.current.value = '';
+      loadAll();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur');
+    } finally { setPostUploading(false); }
   };
 
   // ── FAQ ──
@@ -1536,12 +1569,29 @@ export default function Admin() {
       {/* ─── POSTS ─── */}
       {tab === 'posts' && (
         <div>
+          <div className="card" style={{ marginBottom: 16, padding: '16px' }}>
+            <p style={{ fontWeight: 700, marginBottom: 12 }}><i className="fas fa-plus-circle" style={{ marginRight: 8, color: 'var(--green-primary)' }} />Ajouter un post</p>
+            <textarea value={postMsg} onChange={e => setPostMsg(e.target.value)} placeholder="Message du post (optionnel si une image est ajoutée)" rows={3} style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+            {postImagePreview && (
+              <img src={postImagePreview} alt="Aperçu" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 10, marginTop: 10, background: 'rgba(0,0,0,0.04)' }} />
+            )}
+            <input ref={postFileRef} type="file" accept="image/*" onChange={handlePostFileChange} style={{ display: 'none' }} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button onClick={() => postFileRef.current?.click()} className="btn btn-outline" style={{ flex: 1, fontSize: 13 }}>
+                <i className="fas fa-image" /> {postImageFile ? 'Changer' : 'Image'}
+              </button>
+              <button onClick={createPost} disabled={postUploading} className="btn btn-primary" style={{ flex: 1, fontSize: 13 }}>
+                {postUploading ? 'Publication...' : 'Publier'}
+              </button>
+            </div>
+          </div>
           {posts.map(p => (
             <div key={p.id} className="card" style={{ marginBottom: 10, padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontWeight: 700, marginBottom: 4 }}>{p.nom}</p>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.5 }}>{p.message}</p>
+                  {p.message && <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.5 }}>{p.message}</p>}
+                  {p.image && <img src={`/uploads/${p.image}`} alt="Capture" style={{ width: '100%', maxHeight: 280, objectFit: 'contain', borderRadius: 8, marginTop: 8, background: 'rgba(0,0,0,0.04)' }} />}
                   <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 4 }}>{new Date(p.date_creation).toLocaleDateString('fr-FR')}</p>
                 </div>
                 <span className={`badge badge-${statusColor[p.statut] || 'yellow'}`}>{p.statut}</span>

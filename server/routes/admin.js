@@ -44,7 +44,13 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads')),
   filename: (req, file, cb) => cb(null, 'annonce_' + Date.now() + path.extname(file.originalname)),
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+// Sécurité : images uniquement. Empêche l'upload de .svg/.html/.js servis depuis
+// /uploads (risque XSS). S'applique aux affiches, logos opérateurs et posts admin.
+const imageOnly = (req, file, cb) => {
+  if (/\.(jpe?g|png|webp|gif|hei[cf]|bmp)$/i.test(file.originalname || '')) cb(null, true);
+  else cb(new Error('Image uniquement (JPG, PNG, WEBP, GIF)'));
+};
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: imageOnly });
 
 const planStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads')),
@@ -955,6 +961,25 @@ router.get('/posts', adminMiddleware, async (req, res) => {
       ...p, nom: p.utilisateurs?.nom, utilisateurs: undefined,
     }));
     res.json({ posts: result });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Création d'un post par l'administrateur : publié immédiatement (statut = valide),
+// donc visible par tous les utilisateurs dans le slider de la communauté.
+router.post('/posts', adminMiddleware, upload.single('image'), async (req, res) => {
+  try {
+    const message = (req.body.message || '').trim();
+    const image = req.file ? req.file.filename : '';
+    if (!message && !image) {
+      return res.status(400).json({ error: 'Ajoutez une image ou un message' });
+    }
+    const { error } = await supabase
+      .from('posts')
+      .insert({ user_id: req.user.id, message, image, statut: 'valide' });
+    if (error) throw error;
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' });
   }
