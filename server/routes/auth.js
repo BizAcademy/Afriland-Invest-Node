@@ -2,10 +2,15 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { supabase } = require('../db');
+const afribapay = require('../services/afribapay');
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'afriland_secret_2024';
 
+// Liste de secours (dernier recours) si la liste des pays Afribapay est
+// momentanément indisponible. La SOURCE DE VÉRITÉ reste afribapay.getCountries()
+// — la même liste que celle affichée dans le menu déroulant de l'inscription —
+// pour que TOUT pays proposé à l'utilisateur puisse réellement s'inscrire.
 const PAYS_ELIGIBLES = {
   '+229': 'Bénin',
   '+226': 'Burkina Faso',
@@ -16,6 +21,23 @@ const PAYS_ELIGIBLES = {
   '+228': 'Togo',
 };
 
+// Retourne le nom du pays correspondant à un indicatif (+242, +229 …) s'il fait
+// partie des pays proposés à l'inscription, sinon null. On valide contre la
+// liste Afribapay (XOF/XAF) afin que le contrôle d'éligibilité et le menu
+// déroulant restent TOUJOURS synchronisés (plus de « Pays non éligible » pour
+// un pays affiché). En cas d'échec du service, on retombe sur la liste statique.
+async function paysPourIndicatif(indicatif) {
+  if (!indicatif) return null;
+  const prefix = String(indicatif).replace(/\D/g, ''); // "+242" -> "242"
+  if (!prefix) return null;
+  try {
+    const countries = await afribapay.getCountries();
+    const c = (countries || []).find((x) => String(x.prefix) === prefix);
+    if (c && c.country_name) return c.country_name;
+  } catch { /* service pays indisponible : on bascule sur le repli statique */ }
+  return PAYS_ELIGIBLES[`+${prefix}`] || null;
+}
+
 router.post('/login', async (req, res) => {
   try {
     const { indicatif, telephone, mot_de_passe } = req.body;
@@ -23,7 +45,7 @@ router.post('/login', async (req, res) => {
     if (!indicatif || !telephone || !mot_de_passe) {
       return res.status(400).json({ error: 'Tous les champs sont obligatoires' });
     }
-    if (!PAYS_ELIGIBLES[indicatif]) {
+    if (!(await paysPourIndicatif(indicatif))) {
       return res.status(400).json({ error: 'Code pays non valide' });
     }
 
@@ -75,7 +97,8 @@ router.post('/register', async (req, res) => {
     if (!nom || !indicatif || !telephone || !mot_de_passe) {
       return res.status(400).json({ error: 'Tous les champs obligatoires doivent être remplis' });
     }
-    if (!PAYS_ELIGIBLES[indicatif]) {
+    const paysNom = await paysPourIndicatif(indicatif);
+    if (!paysNom) {
       return res.status(400).json({ error: 'Pays non éligible' });
     }
 
@@ -110,7 +133,9 @@ router.post('/register', async (req, res) => {
       .insert({
         nom,
         telephone: full_tel,
-        pays: pays || PAYS_ELIGIBLES[indicatif],
+        // Le pays est TOUJOURS déduit de l'indicatif (source fiable), jamais du
+        // libellé envoyé par le client — pour éviter toute incohérence.
+        pays: paysNom,
         mot_de_passe: hashedPassword,
         solde: 0,
         revenus_totaux: 0,
