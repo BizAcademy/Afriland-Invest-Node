@@ -155,17 +155,38 @@ function watMidnightUtc(daysAgo = 0) {
   const nowWat = new Date(Date.now() + WAT_OFFSET_MS);
   return new Date(Date.UTC(nowWat.getUTCFullYear(), nowWat.getUTCMonth(), nowWat.getUTCDate() - daysAgo, 0, 0, 0) - WAT_OFFSET_MS);
 }
+// Instant UTC = 1er jour du mois (heure WAT) il y a `monthsAgo` mois.
+function watMonthStartUtc(monthsAgo = 0) {
+  const nowWat = new Date(Date.now() + WAT_OFFSET_MS);
+  return new Date(Date.UTC(nowWat.getUTCFullYear(), nowWat.getUTCMonth() - monthsAgo, 1, 0, 0, 0) - WAT_OFFSET_MS);
+}
+// Instant UTC = minuit (heure WAT) d'une date 'YYYY-MM-DD' (null si invalide).
+function watDateStartUtc(dateStr) {
+  const [y, m, d] = String(dateStr || '').split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - WAT_OFFSET_MS);
+}
 
 router.get('/wheel-stats', adminMiddleware, async (req, res) => {
   try {
-    const period = ['today', 'yesterday', '7days', 'all'].includes(req.query.period)
+    const period = ['today', 'yesterday', '7days', 'all', 'custom'].includes(req.query.period)
       ? req.query.period : 'today';
+
+    // Période personnalisée : bornes fournies par l'admin (dates 'YYYY-MM-DD', heure WAT).
+    let customStart = null, customEnd = null;
+    if (period === 'custom') {
+      customStart = watDateStartUtc(req.query.start);
+      const e = watDateStartUtc(req.query.end);
+      if (!customStart || !e) return res.status(400).json({ error: 'Période personnalisée : dates invalides' });
+      customEnd = new Date(e.getTime() + 24 * 60 * 60 * 1000);
+    }
 
     // Fenêtre de récupération (on charge un peu large puis on filtre/regroupe en JS).
     let fetchStart = null;
     if (period === 'today') fetchStart = watMidnightUtc(0);
     else if (period === 'yesterday') fetchStart = watMidnightUtc(1);
     else if (period === '7days') fetchStart = watMidnightUtc(6);
+    else if (period === 'custom') fetchStart = customStart;
 
     // Garde-fou : on borne le nombre de lignes récupérées pour éviter qu'une
     // requête « Tout » ne devienne trop lourde avec la croissance des données.
@@ -186,6 +207,7 @@ router.get('/wheel-stats', adminMiddleware, async (req, res) => {
     if (period === 'today') { periodStart = watMidnightUtc(0); periodEnd = new Date(); }
     else if (period === 'yesterday') { periodStart = watMidnightUtc(1); periodEnd = watMidnightUtc(0); }
     else if (period === '7days') { periodStart = watMidnightUtc(6); periodEnd = new Date(); }
+    else if (period === 'custom') { periodStart = customStart; periodEnd = customEnd; }
 
     const inPeriod = (rows || []).filter(r => {
       if (!periodStart) return true;
@@ -814,15 +836,55 @@ router.put('/users/:id/transaction-password', adminMiddleware, async (req, res) 
 
 router.get('/depots', adminMiddleware, async (req, res) => {
   try {
-    const { data: depots } = await supabase
+    // Filtres optionnels : période, statut, opérateur (= "type de dépôt").
+    const period = ['today', 'yesterday', 'month', 'lastmonth', 'all', 'custom'].includes(req.query.period)
+      ? req.query.period : 'all';
+    const statut = ['valide', 'en_attente', 'rejete'].includes(req.query.statut) ? req.query.statut : null;
+    const operateur = (req.query.operateur || '').trim();
+
+    // Bornes de la période (heure WAT), appliquées sur la date de création du dépôt.
+    let start = null, end = null;
+    if (period === 'today') { start = watMidnightUtc(0); }
+    else if (period === 'yesterday') { start = watMidnightUtc(1); end = watMidnightUtc(0); }
+    else if (period === 'month') { start = watMonthStartUtc(0); }
+    else if (period === 'lastmonth') { start = watMonthStartUtc(1); end = watMonthStartUtc(0); }
+    else if (period === 'custom') {
+      start = watDateStartUtc(req.query.start);
+      const e = watDateStartUtc(req.query.end);
+      if (!start || !e) return res.status(400).json({ error: 'Période personnalisée : dates invalides' });
+      end = new Date(e.getTime() + 24 * 60 * 60 * 1000);
+    }
+
+    let query = supabase
       .from('depots')
       .select('*, utilisateurs(nom, telephone)')
       .order('date_depot', { ascending: false })
-      .limit(100);
-    const result = (depots || []).map(d => ({
+      .range(0, 4999); // borne haute (contourne le plafond 1000) — large à cette échelle
+    if (statut) query = query.eq('statut', statut);
+    if (operateur) query = query.eq('operateur', operateur);
+    if (start) query = query.gte('date_depot', start.toISOString());
+    if (end) query = query.lt('date_depot', end.toISOString());
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const rows = data || [];
+    const total = rows.reduce((s, d) => s + parseFloat(d.montant || 0), 0);
+    // On n'affiche que les 300 plus récents, mais le résumé (nombre + total) porte
+    // sur l'ensemble des dépôts correspondant aux filtres.
+    const result = rows.slice(0, 300).map(d => ({
       ...d, nom: d.utilisateurs?.nom, telephone: d.utilisateurs?.telephone, utilisateurs: undefined,
     }));
-    res.json({ depots: result });
+
+    // Liste des opérateurs présents (pour le menu déroulant "type de dépôt").
+    const { data: opRows } = await supabase.from('depots').select('operateur').range(0, 9999);
+    const operateurs = [...new Set((opRows || []).map(o => o.operateur).filter(Boolean))].sort();
+
+    res.json({
+      depots: result,
+      summary: { count: rows.length, total: Math.round(total) },
+      operateurs,
+    });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' });
   }

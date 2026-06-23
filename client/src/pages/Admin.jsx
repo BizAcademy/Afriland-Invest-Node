@@ -35,6 +35,18 @@ export default function Admin() {
   const [wheelStats, setWheelStats] = useState(null);
   const [wheelPeriod, setWheelPeriod] = useState('today');
   const [wheelLoading, setWheelLoading] = useState(false);
+  const [wheelStart, setWheelStart] = useState('');
+  const [wheelEnd, setWheelEnd] = useState('');
+
+  // Filtres des dépôts (période / type=opérateur / statut)
+  const [depotPeriod, setDepotPeriod] = useState('all');
+  const [depotStatut, setDepotStatut] = useState('all');
+  const [depotType, setDepotType] = useState('all');
+  const [depotStart, setDepotStart] = useState('');
+  const [depotEnd, setDepotEnd] = useState('');
+  const [depotSummary, setDepotSummary] = useState(null);
+  const [depotOperateurs, setDepotOperateurs] = useState([]);
+  const [depotLoading, setDepotLoading] = useState(false);
 
   // Modals
   const [creditAmount, setCreditAmount] = useState('');
@@ -188,13 +200,32 @@ export default function Admin() {
   };
 
   // ── Statistiques roue ──
-  const loadWheelStats = async (period) => {
+  const loadWheelStats = async (period, start, end) => {
     setWheelLoading(true);
     try {
-      const res = await api.get(`/admin/wheel-stats?period=${period}`);
+      const params = new URLSearchParams({ period });
+      if (period === 'custom') { params.set('start', start); params.set('end', end); }
+      const res = await api.get(`/admin/wheel-stats?${params.toString()}`);
       setWheelStats(res.data);
     } catch { toast.error('Erreur de chargement des statistiques'); }
     finally { setWheelLoading(false); }
+  };
+
+  // ── Dépôts (chargement filtré) ──
+  const loadDepots = async () => {
+    setDepotLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (depotPeriod !== 'all') params.set('period', depotPeriod);
+      if (depotPeriod === 'custom') { params.set('start', depotStart); params.set('end', depotEnd); }
+      if (depotStatut !== 'all') params.set('statut', depotStatut);
+      if (depotType !== 'all') params.set('operateur', depotType);
+      const res = await api.get(`/admin/depots?${params.toString()}`);
+      setDepots(res.data.depots || []);
+      setDepotSummary(res.data.summary || null);
+      if (res.data.operateurs) setDepotOperateurs(res.data.operateurs);
+    } catch { toast.error('Erreur de chargement des dépôts'); }
+    finally { setDepotLoading(false); }
   };
 
   const loadActivePlans = async () => {
@@ -237,18 +268,28 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    if (tab === 'roue') loadWheelStats(wheelPeriod);
+    if (tab === 'roue') {
+      if (wheelPeriod === 'custom' && (!wheelStart || !wheelEnd)) return;
+      loadWheelStats(wheelPeriod, wheelStart, wheelEnd);
+    }
     if (tab === 'vip') loadActivePlans();
     if (tab === 'support') { loadSupport(); setSupportThread(null); }
-  }, [tab, wheelPeriod]);
+  }, [tab, wheelPeriod, wheelStart, wheelEnd]);
+
+  // Recharge les dépôts dès qu'un filtre change (et à l'ouverture de l'onglet).
+  useEffect(() => {
+    if (tab !== 'depots') return;
+    if (depotPeriod === 'custom' && (!depotStart || !depotEnd)) return;
+    loadDepots();
+  }, [tab, depotPeriod, depotStatut, depotType, depotStart, depotEnd]);
 
   // ── Dépôts ──
   const validateDepot = async (id) => {
-    try { await api.put(`/admin/depots/${id}/validate`); toast.success('Dépôt validé ✅'); loadAll(); }
+    try { await api.put(`/admin/depots/${id}/validate`); toast.success('Dépôt validé ✅'); loadDepots(); refreshStats(); }
     catch (err) { toast.error(err.response?.data?.error || 'Erreur'); }
   };
   const rejectDepot = async (id) => {
-    try { await api.put(`/admin/depots/${id}/reject`); toast.success('Dépôt rejeté'); loadAll(); }
+    try { await api.put(`/admin/depots/${id}/reject`); toast.success('Dépôt rejeté'); loadDepots(); refreshStats(); }
     catch (err) { toast.error(err.response?.data?.error || 'Erreur'); }
   };
 
@@ -626,7 +667,7 @@ export default function Admin() {
 
   const TABS = [
     { key: 'dashboard', label: 'Dashboard', icon: 'fa-tachometer-alt' },
-    { key: 'depots', label: 'Dépôts', icon: 'fa-arrow-down', badge: depots.filter(d => d.statut === 'en_attente').length },
+    { key: 'depots', label: 'Dépôts', icon: 'fa-arrow-down', badge: stats?.depots?.en_attente ?? depots.filter(d => d.statut === 'en_attente').length },
     { key: 'retraits', label: 'Retraits', icon: 'fa-hand-holding-usd', badge: retraits.filter(r => r.statut === 'en_attente').length },
     { key: 'demo', label: 'Recharges Démo', icon: 'fa-dice', badge: demoRecharges.filter(r => r.statut === 'en_attente').length },
     { key: 'cadeaux', label: 'Cadeaux VIP', icon: 'fa-gift', badge: cadeaux.filter(c => c.statut === 'en_attente').length },
@@ -1054,11 +1095,86 @@ export default function Admin() {
       {/* ─── DÉPÔTS ─── */}
       {tab === 'depots' && (
         <div>
-          {depots.filter(d => d.statut === 'en_attente').length > 0 && (
-            <p style={{ color: '#f59e0b', fontSize: 13, marginBottom: 12, fontWeight: 600 }}>
-              <i className="fas fa-clock" style={{ marginRight: 6 }} />
-              {depots.filter(d => d.statut === 'en_attente').length} dépôt(s) en attente
+          {/* Filtre par période */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+            {[
+              { key: 'today', label: "Aujourd'hui" },
+              { key: 'yesterday', label: 'Jour précédent' },
+              { key: 'month', label: 'Mois en cours' },
+              { key: 'lastmonth', label: 'Mois dernier' },
+              { key: 'all', label: 'Total' },
+              { key: 'custom', label: 'Personnalisé' },
+            ].map(p => (
+              <button key={p.key} onClick={() => setDepotPeriod(p.key)} style={{
+                padding: '7px 13px', borderRadius: 9, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12,
+                background: depotPeriod === p.key ? 'linear-gradient(135deg,var(--green-primary),var(--green-dark))' : 'rgba(0,0,0,0.05)',
+                color: depotPeriod === p.key ? '#fff' : 'var(--text-muted)',
+              }}>{p.label}</button>
+            ))}
+          </div>
+
+          {/* Dates personnalisées */}
+          {depotPeriod === 'custom' && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Du</label>
+                <input type="date" value={depotStart} max={depotEnd || undefined} onChange={e => setDepotStart(e.target.value)}
+                  style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Au</label>
+                <input type="date" value={depotEnd} min={depotStart || undefined} onChange={e => setDepotEnd(e.target.value)}
+                  style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13 }} />
+              </div>
+            </div>
+          )}
+
+          {/* Type de dépôt (opérateur) + statut */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Type de dépôt</label>
+              <select value={depotType} onChange={e => setDepotType(e.target.value)}
+                style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13, background: '#fff' }}>
+                <option value="all">Tous les types</option>
+                {depotOperateurs.map(op => <option key={op} value={op}>{op}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Statut</label>
+              <select value={depotStatut} onChange={e => setDepotStatut(e.target.value)}
+                style={{ width: '100%', padding: '9px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13, background: '#fff' }}>
+                <option value="all">Tous les statuts</option>
+                <option value="valide">Validé</option>
+                <option value="en_attente">En cours</option>
+                <option value="rejete">Échec</option>
+              </select>
+            </div>
+          </div>
+
+          {depotPeriod === 'custom' && (!depotStart || !depotEnd) ? (
+            <div className="empty-state"><i className="fas fa-calendar" /><p>Choisissez une date de début et de fin pour afficher les dépôts et les statistiques.</p></div>
+          ) : (
+          <>
+          {/* Résumé (statistiques exactes de la sélection) */}
+          <div className="card" style={{ marginBottom: 14, display: 'flex', justifyContent: 'space-around', gap: 10, textAlign: 'center', background: 'linear-gradient(135deg,rgba(27,42,107,0.10),rgba(0,0,0,0.05))' }}>
+            <div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Nombre de dépôts</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--blue-primary)' }}>{fmt(depotSummary?.count ?? depots.length)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Montant total</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--green-primary)' }}>{fmt(depotSummary?.total)} F</p>
+            </div>
+          </div>
+
+          {depotSummary && depotSummary.count > depots.length && (
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, textAlign: 'center' }}>
+              <i className="fas fa-circle-info" style={{ marginRight: 5 }} />Seuls les 300 dépôts les plus récents sont affichés ci-dessous.
             </p>
+          )}
+
+          {depotLoading && (
+            <div style={{ padding: 20, textAlign: 'center' }}><div className="loading-spinner" /></div>
           )}
           {depots.map(d => (
             <div key={d.id} className="card" style={{ marginBottom: 10, padding: '14px 16px' }}>
@@ -1083,6 +1199,8 @@ export default function Admin() {
             </div>
           ))}
           {depots.length === 0 && <div className="empty-state"><i className="fas fa-inbox" /><p>Aucun dépôt</p></div>}
+          </>
+          )}
         </div>
       )}
 
@@ -1245,12 +1363,13 @@ export default function Admin() {
           </p>
 
           {/* Filtre de période */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
             {[
               { key: 'today', label: "Aujourd'hui" },
               { key: 'yesterday', label: 'Jour passé' },
               { key: '7days', label: '7 derniers jours' },
               { key: 'all', label: 'Tout' },
+              { key: 'custom', label: 'Période personnalisée' },
             ].map(p => (
               <button key={p.key} onClick={() => setWheelPeriod(p.key)} style={{
                 padding: '8px 14px', borderRadius: 9, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12,
@@ -1260,7 +1379,25 @@ export default function Admin() {
             ))}
           </div>
 
-          {wheelLoading ? (
+          {/* Dates de la période personnalisée */}
+          {wheelPeriod === 'custom' && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Du</label>
+                <input type="date" value={wheelStart} max={wheelEnd || undefined} onChange={e => setWheelStart(e.target.value)}
+                  style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Au</label>
+                <input type="date" value={wheelEnd} min={wheelStart || undefined} onChange={e => setWheelEnd(e.target.value)}
+                  style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 13 }} />
+              </div>
+            </div>
+          )}
+
+          {wheelPeriod === 'custom' && (!wheelStart || !wheelEnd) ? (
+            <div className="empty-state"><i className="fas fa-calendar" /><p>Choisissez une date de début et de fin pour afficher les statistiques.</p></div>
+          ) : wheelLoading ? (
             <div style={{ padding: 40, textAlign: 'center' }}><div className="loading-spinner" /></div>
           ) : (
             <>
@@ -1290,7 +1427,7 @@ export default function Admin() {
               <div className="card" style={{ marginBottom: 16 }}>
                 <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>
                   <i className="fas fa-chart-line" style={{ marginRight: 6, color: 'var(--green-primary)' }} />
-                  Revenus des mises perdues {wheelPeriod === 'today' ? "(aujourd'hui, par heure)" : wheelPeriod === 'yesterday' ? '(jour passé, par heure)' : '(par jour)'}
+                  Revenus des mises perdues {wheelPeriod === 'today' ? "(aujourd'hui, par heure)" : wheelPeriod === 'yesterday' ? '(jour passé, par heure)' : '(par jour)'}{wheelPeriod === 'custom' && wheelStart && wheelEnd ? ` (du ${wheelStart} au ${wheelEnd})` : ''}
                 </p>
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
                   <i className="fas fa-hand-pointer" style={{ marginRight: 5 }} />Touchez un point de la courbe pour voir le montant gagné.
