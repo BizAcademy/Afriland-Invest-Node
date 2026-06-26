@@ -72,6 +72,8 @@ export default function TransactionReceipt({ receipt, onClose }) {
           {receipt.details?.numero_payeur && <ReceiptRow label="Numéro payeur" value={receipt.details.numero_payeur} />}
           {receipt.details?.methode && <ReceiptRow label="Méthode" value={receipt.details.methode} />}
           {receipt.details?.numero_compte && <ReceiptRow label="Compte" value={receipt.details.numero_compte} />}
+          {receipt.details?.frais != null && <ReceiptRow label="Frais de retrait" value={`${fmt(receipt.details.frais)} FCFA`} />}
+          {receipt.details?.montant_net != null && <ReceiptRow label="Montant net reçu" value={`${fmt(receipt.details.montant_net)} FCFA`} />}
           {receipt.details?.plan_nom && <ReceiptRow label="Plan" value={receipt.details.plan_nom} />}
           {receipt.details?.revenu_journalier > 0 && <ReceiptRow label="Revenu/jour" value={`${fmt(receipt.details.revenu_journalier)} FCFA`} />}
           {receipt.details?.date_fin && <ReceiptRow label="Fin" value={fmtDate(receipt.details.date_fin)} />}

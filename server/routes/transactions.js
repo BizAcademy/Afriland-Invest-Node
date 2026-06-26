@@ -57,7 +57,12 @@ function mapRetrait(r) {
     sens: '-',
     statut: r.statut,
     date: r.date_demande,
-    details: { methode: r.methode, numero_compte: r.numero_compte },
+    details: {
+      methode: r.methode,
+      numero_compte: r.numero_compte,
+      frais: r.frais != null ? parseFloat(r.frais) : 0,
+      montant_net: r.montant_net != null ? parseFloat(r.montant_net) : parseFloat(r.montant || 0),
+    },
   };
 }
 

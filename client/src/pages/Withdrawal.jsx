@@ -211,7 +211,7 @@ export default function Withdrawal() {
               <button key={r.id} onClick={() => setReceipt({
                 id: `retrait-${r.id}`, kind: 'retrait', label: 'Retrait',
                 montant: r.montant, sens: '-', statut: r.statut, date: r.date_demande,
-                details: { methode: r.methode, numero_compte: r.numero_compte },
+                details: { methode: r.methode, numero_compte: r.numero_compte, frais: r.frais, montant_net: r.montant_net },
               })} className="card" style={{ width: '100%', textAlign: 'left', cursor: 'pointer', marginBottom: 10, padding: '14px 16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
