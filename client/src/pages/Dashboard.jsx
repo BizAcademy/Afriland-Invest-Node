@@ -69,7 +69,7 @@ export default function Dashboard() {
     const slides = annonces.length > 0 ? annonces : STATIC_SLIDES;
     slideTimerRef.current = setInterval(() => {
       setSlideIdx(i => (i + 1) % slides.length);
-    }, 4000);
+    }, 5000);
     return () => clearInterval(slideTimerRef.current);
   }, [annonces]);
 
