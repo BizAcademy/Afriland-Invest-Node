@@ -1,5 +1,5 @@
 const express = require('express');
-const { supabase } = require('../db');
+const { supabase, fetchAllRows } = require('../db');
 const router = express.Router();
 
 const MAX_LEN = 2000;
@@ -43,13 +43,12 @@ router.get('/thread', async (req, res) => {
     const tel = normalizeTel(req.query.indicatif, req.query.telephone);
     if (!tel || tel.length < 6) return res.status(400).json({ error: 'Numéro requis' });
 
-    const { data, error } = await supabase
+    // fetchAllRows pagine au-delà du plafond Supabase (1000 lignes/requête).
+    const data = await fetchAllRows(() => supabase
       .from('support_messages')
       .select('id, expediteur, message, date_creation')
       .eq('telephone', tel)
-      .order('date_creation', { ascending: true })
-      .range(0, 9999);
-    if (error) throw error;
+      .order('date_creation', { ascending: true }));
 
     res.json({ telephone: tel, messages: data || [] });
   } catch (err) {

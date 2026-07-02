@@ -1,5 +1,5 @@
 const express = require('express');
-const { supabase } = require('../db');
+const { supabase, fetchAllRows } = require('../db');
 const { adminMiddleware } = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
@@ -92,27 +92,31 @@ router.get('/stats', adminMiddleware, async (req, res) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
+    // fetchAllRows pagine au-delà du plafond Supabase (1000 lignes/requête) :
+    // sans lui, les TOTAUX (dépôts/retraits/soldes) sous-comptaient dès que la
+    // table dépassait 1000 lignes. Les `count: exact` ne sont pas concernés.
     const [
       { count: usersCount },
       { count: usersToday },
-      { data: depotsValides },
-      { data: depotsAttente },
-      { data: retraitsValides },
-      { data: retraitsAttente },
+      depotsValides,
+      depotsAttente,
+      retraitsValides,
+      retraitsAttente,
       { count: commandesCount },
-      { data: soldesTotaux },
+      soldesTotaux,
     ] = await Promise.all([
       supabase.from('utilisateurs').select('*', { count: 'exact', head: true }),
       supabase.from('utilisateurs').select('*', { count: 'exact', head: true }).gte('date_inscription', todayStart.toISOString()),
-      supabase.from('depots').select('montant').eq('statut', 'valide'),
-      supabase.from('depots').select('montant', { count: 'exact' }).eq('statut', 'en_attente'),
-      supabase.from('retraits').select('montant').eq('statut', 'valide'),
-      supabase.from('retraits').select('montant', { count: 'exact' }).eq('statut', 'en_attente'),
+      fetchAllRows(() => supabase.from('depots').select('montant').eq('statut', 'valide')),
+      fetchAllRows(() => supabase.from('depots').select('montant').eq('statut', 'en_attente')),
+      fetchAllRows(() => supabase.from('retraits').select('montant').eq('statut', 'valide')),
+      fetchAllRows(() => supabase.from('retraits').select('montant').eq('statut', 'en_attente')),
       supabase.from('commandes').select('*', { count: 'exact', head: true }).eq('statut', 'actif'),
       // Le solde réel de chaque compte vit dans la table `soldes` (mise à jour par
       // les RPC). La colonne `utilisateurs.solde` n'est jamais alimentée : la lire
       // donnait un total cumulé toujours faux (≈ 0). On lit donc bien `soldes`.
-      supabase.from('soldes').select('solde'),
+      // NB : `soldes` n'a pas de colonne `id`, on pagine triée par `user_id`.
+      fetchAllRows(() => supabase.from('soldes').select('user_id, solde').order('user_id', { ascending: true }), 1000, { orderById: false }),
     ]);
 
     const totalDepots = (depotsValides || []).reduce((s, d) => s + parseFloat(d.montant || 0), 0);
@@ -188,19 +192,18 @@ router.get('/wheel-stats', adminMiddleware, async (req, res) => {
     else if (period === '7days') fetchStart = watMidnightUtc(6);
     else if (period === 'custom') fetchStart = customStart;
 
-    // Garde-fou : on borne le nombre de lignes récupérées pour éviter qu'une
-    // requête « Tout » ne devienne trop lourde avec la croissance des données.
-    // On prend les plus récentes en priorité (largement suffisant à cette échelle).
-    const MAX_ROWS = 100000;
-    let query = supabase
-      .from('historique_revenus')
-      .select('user_id, montant, type, date_paiement')
-      .in('type', ['mise_roue', 'bonus'])
-      .order('date_paiement', { ascending: false })
-      .limit(MAX_ROWS);
-    if (fetchStart) query = query.gte('date_paiement', fetchStart.toISOString());
-    const { data: rows, error } = await query;
-    if (error) throw error;
+    // fetchAllRows pagine au-delà du plafond Supabase (1000 lignes/requête) :
+    // sans lui, un .limit(100000) était quand même tronqué à 1000 lignes et la
+    // période « Tout » sous-comptait dès que mise_roue+bonus dépassaient 1000.
+    const rows = await fetchAllRows(() => {
+      let query = supabase
+        .from('historique_revenus')
+        .select('id, user_id, montant, type, date_paiement')
+        .in('type', ['mise_roue', 'bonus'])
+        .order('date_paiement', { ascending: false });
+      if (fetchStart) query = query.gte('date_paiement', fetchStart.toISOString());
+      return query;
+    });
 
     // Bornes de la période sélectionnée.
     let periodStart = null, periodEnd = null;
@@ -412,19 +415,18 @@ router.put('/commandes/:id/toggle', adminMiddleware, async (req, res) => {
 // détenteur, le type de plan, le capital, le revenu/jour et le temps restant.
 router.get('/active-plans', adminMiddleware, async (req, res) => {
   try {
-    const { data: cmds, error } = await supabase
+    // fetchAllRows pagine au-delà du plafond Supabase (1000 lignes/requête).
+    const cmds = await fetchAllRows(() => supabase
       .from('commandes')
       .select('id, user_id, montant, revenu_journalier, date_debut, date_fin, statut, planinvestissement(nom, duree_jours)')
       .eq('statut', 'actif')
-      .order('date_fin', { ascending: true })
-      .range(0, 9999); // éviter le plafond Supabase par défaut (1000 lignes)
-    if (error) throw error;
+      .order('date_fin', { ascending: true }));
 
     const ids = [...new Set((cmds || []).map(c => c.user_id))];
     let userMap = {};
     if (ids.length) {
-      const { data: us } = await supabase
-        .from('utilisateurs').select('id, nom, telephone, pays').in('id', ids).range(0, 9999);
+      const us = await fetchAllRows(() => supabase
+        .from('utilisateurs').select('id, nom, telephone, pays').in('id', ids));
       userMap = Object.fromEntries((us || []).map(u => [u.id, u]));
     }
 
@@ -468,12 +470,11 @@ router.get('/active-plans', adminMiddleware, async (req, res) => {
 // Liste des conversations (groupées par numéro) + total de messages non lus.
 router.get('/support', adminMiddleware, async (req, res) => {
   try {
-    const { data, error } = await supabase
+    // fetchAllRows pagine au-delà du plafond Supabase (1000 lignes/requête).
+    const data = await fetchAllRows(() => supabase
       .from('support_messages')
       .select('id, telephone, nom, expediteur, message, lu, date_creation')
-      .order('date_creation', { ascending: true })
-      .range(0, 9999);
-    if (error) throw error;
+      .order('date_creation', { ascending: true }));
 
     const convoMap = new Map();
     for (const m of data || []) {
@@ -506,13 +507,12 @@ router.get('/support/thread', adminMiddleware, async (req, res) => {
     const tel = req.query.telephone;
     if (!tel) return res.status(400).json({ error: 'Numéro requis' });
 
-    const { data, error } = await supabase
+    // fetchAllRows pagine au-delà du plafond Supabase (1000 lignes/requête).
+    const data = await fetchAllRows(() => supabase
       .from('support_messages')
       .select('id, expediteur, message, lu, date_creation')
       .eq('telephone', tel)
-      .order('date_creation', { ascending: true })
-      .range(0, 9999);
-    if (error) throw error;
+      .order('date_creation', { ascending: true }));
 
     await supabase
       .from('support_messages')
@@ -658,12 +658,14 @@ router.get('/users/:id/transactions', adminMiddleware, async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
 
-    const [{ data: soldeRow }, depotsRes, retraitsRes, commandesRes, revenusRes] = await Promise.all([
+    // fetchAllRows pagine au-delà du plafond Supabase (1000 lignes/requête)
+    // et propage les erreurs (aucune catégorie ne disparaît en silence).
+    const [{ data: soldeRow }, depotsRows, retraitsRows, commandesRows, revenusRows] = await Promise.all([
       supabase.from('soldes').select('solde').eq('user_id', userId).maybeSingle(),
-      supabase.from('depots').select('*').eq('user_id', userId),
-      supabase.from('retraits').select('*').eq('user_id', userId),
-      supabase.from('commandes').select('*, planinvestissement(nom)').eq('user_id', userId),
-      supabase.from('historique_revenus').select('*').eq('user_id', userId),
+      fetchAllRows(() => supabase.from('depots').select('*').eq('user_id', userId)),
+      fetchAllRows(() => supabase.from('retraits').select('*').eq('user_id', userId)),
+      fetchAllRows(() => supabase.from('commandes').select('*, planinvestissement(nom)').eq('user_id', userId)),
+      fetchAllRows(() => supabase.from('historique_revenus').select('*').eq('user_id', userId)),
     ]);
     const currentSolde = parseFloat(soldeRow?.solde || 0);
 
@@ -682,7 +684,7 @@ router.get('/users/:id/transactions', adminMiddleware, async (req, res) => {
     const entries = [];
 
     // Dépôts — crédités au solde uniquement une fois validés.
-    for (const d of depotsRes.data || []) {
+    for (const d of depotsRows) {
       const montant = parseFloat(d.montant || 0);
       const effectif = d.statut === 'valide';
       entries.push({
@@ -695,7 +697,7 @@ router.get('/users/:id/transactions', adminMiddleware, async (req, res) => {
     }
 
     // Retraits — déduits dès la demande ; un retrait rejeté est remboursé (net 0).
-    for (const r of retraitsRes.data || []) {
+    for (const r of retraitsRows) {
       const montant = parseFloat(r.montant || 0);
       const rembourse = r.statut === 'rejete';
       entries.push({
@@ -708,7 +710,7 @@ router.get('/users/:id/transactions', adminMiddleware, async (req, res) => {
     }
 
     // Investissements — le principal est déduit à l'achat (aucun remboursement).
-    for (const c of commandesRes.data || []) {
+    for (const c of commandesRows) {
       const montant = parseFloat(c.montant || 0);
       const inactif = c.statut === 'annule' || c.statut === 'refuse';
       entries.push({
@@ -724,7 +726,7 @@ router.get('/users/:id/transactions', adminMiddleware, async (req, res) => {
     // stocké : d'anciennes lignes `mise_roue` ont été enregistrées en positif
     // alors qu'une mise est toujours un débit. On normalise donc par sémantique.
     const DEBIT_TYPES = new Set(['mise_roue', 'debit_admin']);
-    for (const rev of revenusRes.data || []) {
+    for (const rev of revenusRows) {
       const montant = Math.abs(parseFloat(rev.montant || 0));
       const isDebit = DEBIT_TYPES.has(rev.type);
       // Parrainage : on précise le niveau (1/2/3) reçu quand il est connu.
@@ -855,20 +857,19 @@ router.get('/depots', adminMiddleware, async (req, res) => {
       end = new Date(e.getTime() + 24 * 60 * 60 * 1000);
     }
 
-    let query = supabase
-      .from('depots')
-      .select('*, utilisateurs(nom, telephone)')
-      .order('date_depot', { ascending: false })
-      .range(0, 4999); // borne haute (contourne le plafond 1000) — large à cette échelle
-    if (statut) query = query.eq('statut', statut);
-    if (operateur) query = query.eq('operateur', operateur);
-    if (start) query = query.gte('date_depot', start.toISOString());
-    if (end) query = query.lt('date_depot', end.toISOString());
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    const rows = data || [];
+    // fetchAllRows pagine au-delà du plafond Supabase (1000 lignes/requête) :
+    // le résumé (nombre + total) porte ainsi sur TOUS les dépôts filtrés.
+    const rows = await fetchAllRows(() => {
+      let query = supabase
+        .from('depots')
+        .select('*, utilisateurs(nom, telephone)')
+        .order('date_depot', { ascending: false });
+      if (statut) query = query.eq('statut', statut);
+      if (operateur) query = query.eq('operateur', operateur);
+      if (start) query = query.gte('date_depot', start.toISOString());
+      if (end) query = query.lt('date_depot', end.toISOString());
+      return query;
+    });
     const total = rows.reduce((s, d) => s + parseFloat(d.montant || 0), 0);
     // On n'affiche que les 300 plus récents, mais le résumé (nombre + total) porte
     // sur l'ensemble des dépôts correspondant aux filtres.
@@ -877,7 +878,7 @@ router.get('/depots', adminMiddleware, async (req, res) => {
     }));
 
     // Liste des opérateurs présents (pour le menu déroulant "type de dépôt").
-    const { data: opRows } = await supabase.from('depots').select('operateur').range(0, 9999);
+    const opRows = await fetchAllRows(() => supabase.from('depots').select('operateur'));
     const operateurs = [...new Set((opRows || []).map(o => o.operateur).filter(Boolean))].sort();
 
     res.json({

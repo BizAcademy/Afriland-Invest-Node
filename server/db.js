@@ -50,4 +50,30 @@ const supabasePublic = createClient(supabaseUrl || DUMMY_URL, supabaseAnonKey ||
 // dans server/index.js (différé après le boot, écrit dans _env-check.txt). On
 // évite ici un 2e appel réseau redondant qui ralentissait le démarrage.
 
-module.exports = { supabase, supabasePublic };
+// ─── Pagination Supabase ────────────────────────────────────────────────────
+// Supabase (PostgREST) plafonne CHAQUE requête à 1000 lignes, MÊME avec
+// .range(0, 9999) : la plage demandée est tronquée à max-rows (1000). Dès
+// qu'une table dépasse 1000 lignes, les requêtes "simples" perdent
+// silencieusement des lignes (ex. transactions récentes invisibles).
+// Ce helper récupère TOUTES les lignes en paginant par pages de 1000.
+//   buildQuery : fabrique retournant une NOUVELLE requête à chaque appel
+//                (ex. () => supabase.from('depots').select('*').eq(...)).
+//   Un tri stable par `id` est ajouté en dernier critère pour que la
+//   pagination soit déterministe ; toute erreur est PROPAGÉE (pas de silence).
+//   Option { orderById: false } pour les tables SANS colonne `id`
+//   (ex. `soldes`, clé = user_id) : la fabrique doit alors fournir son
+//   propre tri stable via .order(...).
+async function fetchAllRows(buildQuery, pageSize = 1000, { orderById = true } = {}) {
+  const rows = [];
+  for (let from = 0; ; from += pageSize) {
+    let query = buildQuery();
+    if (orderById) query = query.order('id', { ascending: true });
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+}
+
+module.exports = { supabase, supabasePublic, fetchAllRows };

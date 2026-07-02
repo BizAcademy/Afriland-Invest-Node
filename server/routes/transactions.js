@@ -1,5 +1,5 @@
 const express = require('express');
-const { supabase } = require('../db');
+const { supabase, fetchAllRows } = require('../db');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 const router = express.Router();
 
@@ -87,22 +87,25 @@ function mapCommande(c) {
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    const [depotsRes, retraitsRes, commandesRes, revenusRes] = await Promise.all([
-      supabase.from('depots').select('*').eq('user_id', userId),
-      supabase.from('retraits').select('*').eq('user_id', userId),
-      supabase.from('commandes').select('*, planinvestissement(nom)').eq('user_id', userId),
-      supabase.from('historique_revenus').select('*').eq('user_id', userId),
+    // fetchAllRows pagine au-delà du plafond Supabase (1000 lignes/requête)
+    // et PROPAGE les erreurs : plus aucune catégorie ne disparaît en silence.
+    const [depots, retraits, commandes, revenus] = await Promise.all([
+      fetchAllRows(() => supabase.from('depots').select('*').eq('user_id', userId)),
+      fetchAllRows(() => supabase.from('retraits').select('*').eq('user_id', userId)),
+      fetchAllRows(() => supabase.from('commandes').select('*, planinvestissement(nom)').eq('user_id', userId)),
+      fetchAllRows(() => supabase.from('historique_revenus').select('*').eq('user_id', userId)),
     ]);
 
     const transactions = [
-      ...(depotsRes.data || []).map(mapDepot),
-      ...(retraitsRes.data || []).map(mapRetrait),
-      ...(commandesRes.data || []).map(mapCommande),
-      ...(revenusRes.data || []).map(mapRevenu),
+      ...depots.map(mapDepot),
+      ...retraits.map(mapRetrait),
+      ...commandes.map(mapCommande),
+      ...revenus.map(mapRevenu),
     ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     res.json({ transactions });
   } catch (err) {
+    console.error('User transactions list error:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -110,16 +113,19 @@ router.get('/', authMiddleware, async (req, res) => {
 // ── Toutes les transactions (admin) ──
 router.get('/admin', adminMiddleware, async (req, res) => {
   try {
-    const [depotsRes, retraitsRes, commandesRes, revenusRes, usersRes] = await Promise.all([
-      supabase.from('depots').select('*'),
-      supabase.from('retraits').select('*'),
-      supabase.from('commandes').select('*, planinvestissement(nom)'),
-      supabase.from('historique_revenus').select('*'),
-      supabase.from('utilisateurs').select('id, nom, telephone'),
+    // fetchAllRows pagine au-delà du plafond Supabase (1000 lignes/requête) :
+    // sans lui, dès que historique_revenus dépassait 1000 lignes, les
+    // transactions récentes n'apparaissaient plus côté admin.
+    const [depots, retraits, commandes, revenus, users] = await Promise.all([
+      fetchAllRows(() => supabase.from('depots').select('*')),
+      fetchAllRows(() => supabase.from('retraits').select('*')),
+      fetchAllRows(() => supabase.from('commandes').select('*, planinvestissement(nom)')),
+      fetchAllRows(() => supabase.from('historique_revenus').select('*')),
+      fetchAllRows(() => supabase.from('utilisateurs').select('id, nom, telephone')),
     ]);
 
     const userMap = {};
-    for (const u of usersRes.data || []) userMap[u.id] = u;
+    for (const u of users) userMap[u.id] = u;
 
     const attach = (tx, userId) => ({
       ...tx,
@@ -127,14 +133,15 @@ router.get('/admin', adminMiddleware, async (req, res) => {
     });
 
     const transactions = [
-      ...(depotsRes.data || []).map((d) => attach(mapDepot(d), d.user_id)),
-      ...(retraitsRes.data || []).map((r) => attach(mapRetrait(r), r.user_id)),
-      ...(commandesRes.data || []).map((c) => attach(mapCommande(c), c.user_id)),
-      ...(revenusRes.data || []).map((r) => attach(mapRevenu(r), r.user_id)),
+      ...depots.map((d) => attach(mapDepot(d), d.user_id)),
+      ...retraits.map((r) => attach(mapRetrait(r), r.user_id)),
+      ...commandes.map((c) => attach(mapCommande(c), c.user_id)),
+      ...revenus.map((r) => attach(mapRevenu(r), r.user_id)),
     ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     res.json({ transactions });
   } catch (err) {
+    console.error('Admin transactions list error:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
